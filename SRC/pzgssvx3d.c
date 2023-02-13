@@ -881,8 +881,8 @@ pzgssvx3d (superlu_dist_options_t * options, SuperMatrix * A,
 			}
 #if ( PRNTlevel>=2 )
 			// dmin = damch_dist ("Overflow");
-			// dsum = 0.0;
-			// dprod = 1.0;
+			 dsum = 0.0;
+			 dprod = 1.0;
 #endif
 			if ( iinfo == 0 ) {
 			    if (job == 5) {

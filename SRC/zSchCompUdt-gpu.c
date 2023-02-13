@@ -25,7 +25,6 @@ at the top-level directory.
 
 int full;
 double gemm_timer = 0.0;
-double scatter_timer = 0.0;
 
 if ( msg0 && msg2 ) {  /* L(:,k) and U(k,:) are not empty. */
     ldu   =0;
@@ -183,7 +182,11 @@ if ( msg0 && msg2 ) {  /* L(:,k) and U(k,:) are not empty. */
 
 	    tt_end = SuperLU_timer_();
 	    GatherUTimer += tt_end - tt_start;
-	    
+#if ( PRNTlevel>= 1)
+        gemm_max_m = SUPERLU_MAX(gemm_max_m, temp_nbrow);
+        gemm_max_n = SUPERLU_MAX(gemm_max_n, ncols);
+        gemm_max_k = SUPERLU_MAX(gemm_max_k, ldu);
+#endif	    
 	    if ( num_streams_used > 0 ) {
 #ifdef PI_DEBUG
 		printf("nbrow %d *ldu %d  =%d < ldt %d * max_row_size %d =%d \n",nbrow,ldu,nbrow*ldu,ldt,max_row_size,ldt*max_row_size ); fflush(stdout);
@@ -206,7 +209,7 @@ if ( msg0 && msg2 ) {  /* L(:,k) and U(k,:) are not empty. */
 
 		/* Following is for testing purpose */
 		if ( num_col_stream > 0 ) {
-		
+            double tt1 = SuperLU_timer_();
 #ifdef GPU_ACC  /* Sherry: this file is not used if GPU_ACC is not defined. */
 		    int stream_id = i;
 		    int b_offset  = ldu * st_col;
@@ -242,15 +245,25 @@ if ( msg0 && msg2 ) {  /* L(:,k) and U(k,:) are not empty. */
 		    checkGPU( gpuMemcpyAsync(tempv1, dC+c_offset,
 					   C_stream_size,
 					   gpuMemcpyDeviceToHost,
-					   streams[stream_id]) );
+                streams[stream_id]));
+            cublasGEMMTimer += SuperLU_timer_() - tt1;
+            
 #else /*-- on CPU --*/
 		} else { // num_col_stream == 0  Sherry: how can get here?
-                    // Sherry: looks like a batched GEMM 
-	            my_zgemm_("N", "N", &nbrow, &num_col_stream, &ldu,
+            // Sherry: looks like a batched GEMM 
+            double tt1 = SuperLU_timer_();
+#if ( PRNTlevel>= 1)
+            gemm_max_m = SUPERLU_MAX(gemm_max_m, temp_nbrow);
+            gemm_max_n = SUPERLU_MAX(gemm_max_n, ncols);
+            gemm_max_k = SUPERLU_MAX(gemm_max_k, ldu);
+#endif
+            my_zgemm_("N", "N", &nbrow, &num_col_stream, &ldu,
 			      &alpha, &lusup[luptr+(knsupc-ldu)*nsupr],
 			      &nsupr, tempu+ldu*st_col, &ldu, &beta,
-			      tempv1, &nbrow, 1, 1);
-	        }
+                tempv1, &nbrow, 1, 1);
+
+            cpuGEMMTimer += SuperLU_timer_() - tt1;
+        }
 #endif /*-- end ifdef GPU_ACC --*/
 
    	      } // end if num_col_stream > 0
@@ -264,7 +277,12 @@ if ( msg0 && msg2 ) {  /* L(:,k) and U(k,:) are not empty. */
 	    tempv = bigV + nbrow * st_col;
 	    tempu = bigU;
 
-	    double tstart = SuperLU_timer_();
+        double tstart = SuperLU_timer_();
+#if ( PRNTlevel>= 1)
+        gemm_max_m = SUPERLU_MAX(gemm_max_m, temp_nbrow);
+        gemm_max_n = SUPERLU_MAX(gemm_max_n, ncols);
+        gemm_max_k = SUPERLU_MAX(gemm_max_k, ldu);
+#endif
 #if defined (USE_VENDOR_BLAS)
 	    zgemm_("N", "N", &nbrow, &num_col, &ldu, &alpha,
 		  &lusup[luptr+(knsupc-ldu)*nsupr], &nsupr,
@@ -274,7 +292,7 @@ if ( msg0 && msg2 ) {  /* L(:,k) and U(k,:) are not empty. */
 		  &lusup[luptr+(knsupc-ldu)*nsupr], &nsupr,
 		  tempu+ldu*st_col, &ldu, &beta, tempv, &nbrow);
 #endif
-	    gemm_timer += SuperLU_timer_() -tstart;
+	    cpuGEMMTimer += SuperLU_timer_() -tstart;
 
 	    /* The following counts both CPU and GPU parts.
 	       full_u_cols[jjj-1] contains both CPU and GPU. */
@@ -360,7 +378,11 @@ if ( msg0 && msg2 ) {  /* L(:,k) and U(k,:) are not empty. */
                                     printf("cpu scatter \n");
                                     printf("A(%d,%d) goes to U block %d \n", ib,jb,ljb);
                                 #endif
-
+#if ( PRNTlevel>= 1)
+                                    gemm_max_m = SUPERLU_MAX(gemm_max_m, temp_nbrow);
+                                    gemm_max_n = SUPERLU_MAX(gemm_max_n, ncols);
+                                    gemm_max_k = SUPERLU_MAX(gemm_max_k, ldu);
+#endif
                                 tempv = tempv1+cum_nrow;
                                 zscatter_u (
 						 ib,jb,
@@ -441,7 +463,11 @@ if ( msg0 && msg2 ) {  /* L(:,k) and U(k,:) are not empty. */
 				printf("cpu scatter \n");
 				printf("A(%d,%d) goes to U block %d \n", ib,jb,ljb);
 #endif
-
+#if ( PRNTlevel>= 1)
+                gemm_max_m = SUPERLU_MAX(gemm_max_m, temp_nbrow);
+                gemm_max_n = SUPERLU_MAX(gemm_max_n, ncols);
+                gemm_max_k = SUPERLU_MAX(gemm_max_k, ldu);
+#endif
 				tempv = tempv1+cum_nrow;
                                 zscatter_u (
 						 ib,jb,
@@ -480,7 +506,7 @@ if ( msg0 && msg2 ) {  /* L(:,k) and U(k,:) are not empty. */
 	    }         /* parallel region */
 
 	    scatter_timer += SuperLU_timer_() - tstart;
-	    
+        double tt1 = SuperLU_timer_();
 	    // Scatter tempv(:, (jjj_st1 : jjj_global)) computed on GPU.
 #ifdef _OPENMP
 #pragma omp parallel							\
@@ -550,7 +576,12 @@ if ( msg0 && msg2 ) {  /* L(:,k) and U(k,:) are not empty. */
 				printf("A(%d,%d) goes to U block %d \n", ib,jb,ljb);
 				fflush(stdout);
 #endif
-                                tempv = tempv1+cum_nrow;
+#if ( PRNTlevel>= 1)
+                gemm_max_m = SUPERLU_MAX(gemm_max_m, temp_nbrow);
+                gemm_max_n = SUPERLU_MAX(gemm_max_n, ncols);
+                gemm_max_k = SUPERLU_MAX(gemm_max_k, ldu);
+#endif
+                tempv = tempv1 + cum_nrow;
                                 zscatter_u (
 						 ib,jb,
 						 nsupc,iukp,xsup,
@@ -567,7 +598,8 @@ if ( msg0 && msg2 ) {  /* L(:,k) and U(k,:) are not empty. */
                                 printf("A(%d,%d) goes to L block %d \n", ib,jb,ljb);
 				fflush(stdout);
 #endif
-                                tempv = tempv1+cum_nrow;
+
+                tempv = tempv1 + cum_nrow;
 
                                 zscatter_l (
 						 ib, ljb,nsupc,iukp,xsup,klst,nbrow,lptr,
@@ -593,8 +625,8 @@ if ( msg0 && msg2 ) {  /* L(:,k) and U(k,:) are not empty. */
 		
             } /* end pragma omp parallel */
             // TAU_STATIC_TIMER_STOP("OUTSIDE_OMP");
-	    
-	    RemainScatterTimer += SuperLU_timer_() - tstart;
+            
+            scatter_timer += SuperLU_timer_() - tt1;
 
         }  /* end while(jjj<nub) */
 
