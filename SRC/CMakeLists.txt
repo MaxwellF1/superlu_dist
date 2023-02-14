@@ -1,4 +1,7 @@
 set(headers
+    #add 
+    utils.h
+    #end
     superlu_FCnames.h
     dcomplex.h
     machines.h
@@ -20,6 +23,10 @@ endif ()
 # first: precision-independent files
 #  global.cpp
 set(sources
+#add 
+    upanelfact_trsm.c
+    zMatrix.c
+#end
   sp_ienv.c
   etree.c 
   sp_colorder.c
@@ -112,7 +119,7 @@ if(enable_double)
     dsuperlu_blas.c
   )
 if (TPL_ENABLE_CUDALIB)
-  list(APPEND sources pdgstrs_lsum_cuda.cu superlu_gpu_utils.cu dsuperlu_gpu.cu)
+  list(APPEND sources pdgstrs_lsum_cuda.cu superlu_gpu_utils.cu dsuperlu_gpu.cu zscatter_opt.cu)
 endif()
 
 if (HAVE_COMBBLAS)
@@ -317,6 +324,9 @@ foreach(target ${targets})
                               SOVERSION ${VERSION_MAJOR}
 			      )
     endif()
+   set_target_properties(${target} PROPERTIES CUDA_RESOLVE_DEVICE_SYMBOLS ON
+                             RUNTIME_OUTPUT_DIRECTORY
+                                 "${CMAKE_SOURCE_DIR}/build")
 endforeach(target)
 
 # Add CUDA runtime library and CUBLAS library

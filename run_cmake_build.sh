@@ -21,7 +21,7 @@ echo "host: $THISHOST"
     -DTPL_PARMETIS_LIBRARIES="${PARMETIS_BUILD_DIR}/libparmetis/libparmetis.a;${PARMETIS_BUILD_DIR}/libmetis/libmetis.a" \
     -DTPL_COMBBLAS_INCLUDE_DIRS="${COMBBLAS_ROOT}/install/include;${COMBBLAS_ROOT}/Applications/BipartiteMatchings" \
     -DTPL_COMBBLAS_LIBRARIES="${COMBBLAS_BUILD_DIR}/libCombBLAS.a" \
-    -DCMAKE_C_FLAGS="-std=c99 -O3 -DDEBUGlevel=0 -DPRNTlevel=2" \
+    -DCMAKE_C_FLAGS="-std=c99 -O3 -DDEBUGlevel=0 -DPRNTlevel=2 -DOPT_CPU_UPANEL_TRSM -DOPT_GPU_LPANEL_TRSM -DOPT_GPU_UPANEL_TRSM -DOPT_GATHER_AVOID -DOPT_SCATTER" \
     -DCMAKE_C_COMPILER=mpicc \
     -DCMAKE_CXX_COMPILER=mpicxx \
     -DCMAKE_CXX_FLAGS="-std=c++11 -O3 -L/usr/local/cuda/lib64 -lcudart -lcudadevrt -lcublas -DPRNTlevel=2" \

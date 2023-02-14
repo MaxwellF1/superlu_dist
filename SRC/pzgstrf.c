@@ -110,7 +110,7 @@ at the top-level directory.
 #include <math.h>
 #include "superlu_zdefs.h"
 #include "gpu_api_utils.h"
-
+#include "superlu_zdefs_ex.h"
 #ifdef GPU_ACC
  // #define NUM_GPU_STREAMS 16
  // #define NUM_GPU_STREAMS 16
@@ -361,6 +361,32 @@ pzgstrf(superlu_dist_options_t* options, int m, int n, double anorm,
     double NetSchurUpTimer = 0.0;
     double schur_flop_counter = 0.0;
 
+    
+#ifdef OPT_GPU_UPANEL_TRSM
+    if (iam == 0)
+        printf("----------OPEN_OPT_GPU_UPANLE_TRSM----------\n");
+#endif
+#ifdef OPT_CPU_UPANEL_TRSM
+    if (iam == 0)
+        printf("----------OPEN_OPT_CPU_UPANLE_TRSM----------\n");
+#endif
+#ifdef OPT_GPU_LPANEL_TRSM
+    if (iam == 0)
+        printf("----------OPEN_OPT_GPU_LPANLE_TRSM----------\n");
+#endif
+#ifdef OPT_GATHER_AVOID
+    if (iam == 0)
+        printf("----------OPEN_OPT_GATHER_AVOID----------\n");
+#endif
+#ifdef MULTI_GPU
+    if (iam == 0)
+        printf("----------OPEN_MULTI_GPU----------\n");
+#endif
+#ifdef OPT_SCATTER
+    if (iam == 0)
+        printf("----------OPEN_OPT_SCATTER----------\n");
+#endif
+    
 #if ( PRNTlevel>= 1)
     /* count GEMM max dimensions */
     int gemm_max_m = 0, gemm_max_n = 0, gemm_max_k = 0;
@@ -885,7 +911,40 @@ pzgstrf(superlu_dist_options_t* options, int m, int n, double anorm,
         if (!(bigV = doublecomplexMalloc_dist(bigv_size)))
             ABORT("Malloc failed for dgemm V buffer");
     }
+#ifdef OPT_GPU_UPANEL_TRSM
+    doublecomplex* d_U, * d_L;
+    gpublasHandle_t* handle1;
+    gpuStream_t* streams1;
+    if (checkGPU(gpuHostMalloc((void**)&d_U, bigu_size * sizeof(doublecomplex), gpuHostMallocDefault)))
+        ABORT("Malloc fails for zgemm buffer U ");
+    if (checkGPU(gpuHostMalloc((void**)&d_L, bigu_size * sizeof(doublecomplex), gpuHostMallocDefault)))
+        ABORT("Malloc fails for zgemm buffer U ");
+    //create handle
+    handle1 = (gpublasHandle_t*)SUPERLU_MALLOC(sizeof(gpublasHandle_t) * nstreams);
+    for (i = 0; i < nstreams; i++) handle1[i] = create_handle();
 
+    // creating streams
+    streams1 = (gpuStream_t*)SUPERLU_MALLOC(sizeof(gpuStream_t) * nstreams);
+    for (i = 0; i < nstreams; ++i)
+        checkGPU(gpuStreamCreate(&streams1[i]));
+#endif
+#ifdef OPT_GPU_LPANEL_TRSM
+    doublecomplex* dl_U, * dl_L;
+    gpublasHandle_t* handle2;
+    gpuStream_t* streams2;
+    if (checkGPU(gpuHostMalloc((void**)&dl_U, bigu_size * sizeof(doublecomplex), gpuHostMallocDefault)))
+        ABORT("Malloc fails for zgemm buffer U ");
+    if (checkGPU(gpuHostMalloc((void**)&dl_L, bigu_size * sizeof(doublecomplex), gpuHostMallocDefault)))
+        ABORT("Malloc fails for zgemm buffer U ");
+    //create handle
+    handle2 = (gpublasHandle_t*)SUPERLU_MALLOC(sizeof(gpublasHandle_t) * nstreams);
+    for (i = 0; i < nstreams; i++) handle2[i] = create_handle();
+
+    // creating streams
+    streams2 = (gpuStream_t*)SUPERLU_MALLOC(sizeof(gpuStream_t) * nstreams);
+    for (i = 0; i < nstreams; ++i)
+        checkGPU(gpuStreamCreate(&streams2[i]));
+#endif  
 #else  /*-------- not to use GPU --------*/
 
 #if 0  /* Does not use buffer_size on CPU */
@@ -1314,8 +1373,23 @@ pzgstrf(superlu_dist_options_t* options, int m, int n, double anorm,
                         /* #pragma omp parallel */ /* Sherry -- parallel done inside pzgstrs2 */
 #endif
                         {
+
+#ifdef OPT_CPU_UPANEL_TRSM
+
+#ifdef OPT_GPU_UPANEL_TRSM
+                            //overlap gpu and cpu computation
+
+                            upanelfact_trsm(kk0, kk, Glu_persist, grid, Llu, stat, d_U, d_L, streams1, handle1, nstreams);
+                            // for (kk0 = kk1; kk0 < kk2; kk0++)
+#else
+
+                            upanelfact_trsm(kk0, kk, Glu_persist, grid, Llu, stat);
+#endif
+
+#else
                             pzgstrs2_omp(kk0, kk, Glu_persist, grid, Llu,
                                 Ublock_info, stat);
+#endif
                         }
 
                         pdgstrs2_timer += SuperLU_timer_() - ttt2;
@@ -1485,8 +1559,17 @@ pzgstrf(superlu_dist_options_t* options, int m, int n, double anorm,
                 /* #pragma omp parallel */ /* Sherry -- parallel done inside pzgstrs2 */
 #endif
                 {
+#ifdef OPT_CPU_UPANEL_TRSM
+#ifdef OPT_GPU_UPANEL_TRSM
+                    upanelfact_trsm(k0, k, Glu_persist, grid, Llu, stat, d_U, d_L, streams1, handle1, nstreams);
+#else
+
+                    upanelfact_trsm(k0, k, Glu_persist, grid, Llu, stat);
+#endif
+#else
                     pzgstrs2_omp(k0, k, Glu_persist, grid, Llu,
                         Ublock_info, stat);
+#endif
                 }
                 pdgstrs2_timer += SuperLU_timer_() - ttt2;
 
