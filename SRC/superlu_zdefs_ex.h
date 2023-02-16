@@ -5,6 +5,7 @@
 #include "superlu_defs_ex.h"
 #include "superlu_zdefs.h"
 #include "utils.h"
+#include "cuda_runtime.h"
 // colunm
 typedef struct {
     doublecomplex* val;
@@ -70,7 +71,7 @@ void zscatter_u_opt(
     int_t** Ufstnz_br_ptr, doublecomplex** Unzval_br_ptr,
     gridinfo_t* grid,
     superlu_dist_options_t* options);
-
+#ifdef GPU_ACC
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -83,3 +84,5 @@ extern "C" {
 #ifdef __cplusplus
 }
 #endif
+#endif
+

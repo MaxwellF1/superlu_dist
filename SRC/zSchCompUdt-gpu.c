@@ -2,9 +2,7 @@
 Copyright (c) 2003, The Regents of the University of California, through
 Lawrence Berkeley National Laboratory (subject to receipt of any required
 approvals from U.S. Dept. of Energy)
-
 All rights reserved.
-
 The source code is distributed under BSD license, see the file License.txt
 at the top-level directory.
 */
@@ -24,7 +22,6 @@ at the top-level directory.
 #define SCHEDULE_STRATEGY dynamic
 
 int full;
-double gemm_timer = 0.0;
 
 if (msg0 && msg2) {  /* L(:,k) and U(k,:) are not empty. */
     ldu = 0;
@@ -316,12 +313,12 @@ if (msg0 && msg2) {  /* L(:,k) and U(k,:) are not empty. */
 #endif /*-- end ifdef GPU_ACC --*/
 #endif /*-- end OPT_gather_avoid -- */
 
-                } // end if num_col_stream > 0
+            } // end if num_col_stream > 0
 
-            } /* end for i = 1 to num_streams used */
+        } /* end for i = 1 to num_streams used */
 
-            /* Special case for CPU -- leading block columns are computed
-               on CPU in order to mask the GPU data transfer latency */
+        /* Special case for CPU -- leading block columns are computed
+           on CPU in order to mask the GPU data transfer latency */
         int num_col = full_u_cols[jjj_st + ncpu_blks - 1];
         int st_col = 0; /* leading part on CPU */
         tempv = bigV + nbrow * st_col;
@@ -356,7 +353,7 @@ if (msg0 && msg2) {  /* L(:,k) and U(k,:) are not empty. */
             tempu + ldu * st_col, &ldu, &beta, tempv, &nbrow);
 #endif
 #endif /*-- end OPT_gather_avoid -- */
-        cpuGEMMTimer += SuperLU_timer_() - tstart;
+        gemm_timer += SuperLU_timer_() - tstart;
 
         /* The following counts both CPU and GPU parts.
            full_u_cols[jjj-1] contains both CPU and GPU. */
@@ -508,10 +505,10 @@ if (msg0 && msg2) {  /* L(:,k) and U(k,:) are not empty. */
                     } /* for lb ... */
 
                     luptr = luptr0;
-                } /* for j = jjj_st ... */
+    } /* for j = jjj_st ... */
 
-                // TAU_STATIC_TIMER_STOP("SPECIAL_CPU_SCATTER");
-            }
+    // TAU_STATIC_TIMER_STOP("SPECIAL_CPU_SCATTER");
+}
             else { // ncpu_blks >= omp_get_num_threads()
 #ifdef _OPENMP
 #pragma omp for schedule(SCHEDULE_STRATEGY) nowait
@@ -617,10 +614,10 @@ if (msg0 && msg2) {  /* L(:,k) and U(k,:) are not empty. */
                         luptr += temp_nbrow;
                         cum_nrow += temp_nbrow;
 
-                    } /* for lb ... */
+                } /* for lb ... */
 
                     luptr = luptr0;
-                } /* for j = jjj_st ... */
+            } /* for j = jjj_st ... */
             }     /* else (ncpu_blks >= omp_get_num_threads()) */
         }         /* parallel region */
 
@@ -682,7 +679,7 @@ if (msg0 && msg2) {  /* L(:,k) and U(k,:) are not empty. */
 #ifdef DGEMM_STAT
                         if (j == jjj_st) {
                             temp_ncol = full_u_cols[j];
-                        }
+                    }
                         else {
                             temp_ncol = full_u_cols[j] - full_u_cols[j - 1];
                         }
@@ -751,7 +748,7 @@ if (msg0 && msg2) {  /* L(:,k) and U(k,:) are not empty. */
                     } /* for lb ... */
 
                     luptr = luptr0;
-                } /* for j = jjj_st ... */
+            } /* for j = jjj_st ... */
 
             } /* end for i = 0 to num_streams_used  */
 

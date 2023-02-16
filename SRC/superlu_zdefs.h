@@ -561,10 +561,22 @@ extern void pzgstrs(superlu_dist_options_t *, int_t,
                     zLUstruct_t *, zScalePermstruct_t *, gridinfo_t *,
 		    doublecomplex *, int_t, int_t, int_t, int, zSOLVEstruct_t *,
 		    SuperLUStat_t *, int *);
-extern void pzgstrf2_trsm(superlu_dist_options_t * options, int_t k0, int_t k,
-			  double thresh, Glu_persist_t *, gridinfo_t *,
-			  zLocalLU_t *, MPI_Request *, int tag_ub,
-			  SuperLUStat_t *, int *info);
+#ifdef OPT_GPU_LPANEL_TRSM
+extern void
+pzgstrf2_trsm
+(superlu_dist_options_t* options, int_t k0, int_t k, double thresh,
+    Glu_persist_t* Glu_persist, gridinfo_t* grid, zLocalLU_t* Llu,
+    MPI_Request* U_diag_blk_send_req, int tag_ub,
+    SuperLUStat_t* stat, int* info,
+    doublecomplex* dl_U, doublecomplex* dl_L, gpublasHandle_t* handles, gpuStream_t* streams, int streamnum);
+#else
+extern void
+pzgstrf2_trsm
+(superlu_dist_options_t* options, int_t k0, int_t k, double thresh,
+    Glu_persist_t* Glu_persist, gridinfo_t* grid, zLocalLU_t* Llu,
+    MPI_Request* U_diag_blk_send_req, int tag_ub,
+    SuperLUStat_t* stat, int* info);
+#endif
 extern void pzgstrs2_omp(int_t k0, int_t k, Glu_persist_t *, gridinfo_t *,
 			 zLocalLU_t *, Ublock_info_t *, SuperLUStat_t *);
 extern int_t pzReDistribute_B_to_X(doublecomplex *B, int_t m_loc, int nrhs, int_t ldb,

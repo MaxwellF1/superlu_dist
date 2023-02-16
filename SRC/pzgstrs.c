@@ -2313,7 +2313,7 @@ for (i=0;i<nroot_send;i++){
 		tmp3 = SUPERLU_MAX(tmp3,stat_loc[i]->utime[SOL_COMM]);
 		tmp4 += stat_loc[i]->ops[SOLVE];
 #if ( PRNTlevel>=2 )
-		if(iam==0)printf("thread %5d gemm %9.5f\n",i,stat_loc[i]->utime[SOL_GEMM]);
+		//if(iam==0)printf("thread %5d gemm %9.5f\n",i,stat_loc[i]->utime[SOL_GEMM]);
 #endif
 	}
 

@@ -327,7 +327,7 @@ pzgstrf(superlu_dist_options_t* options, int m, int n, double anorm,
     /* For measuring load imbalence in omp threads */
     double omp_load_imblc = 0.0;
     double* omp_loop_time;
-
+    double total_gemm_timer = 0.0;
     double cublasGEMMTimer = 0.0;
     double scatter_timer = 0.0;
     double cpuGEMMTimer = 0.0;
@@ -360,7 +360,7 @@ pzgstrf(superlu_dist_options_t* options, int m, int n, double anorm,
     double RemainScatterTimer = 0.0;
     double NetSchurUpTimer = 0.0;
     double schur_flop_counter = 0.0;
-
+    double gemm_timer = 0.0;
     
 #ifdef OPT_GPU_UPANEL_TRSM
     if (iam == 0)
@@ -833,7 +833,7 @@ pzgstrf(superlu_dist_options_t* options, int m, int n, double anorm,
 
     int gpublas_nb = get_gpublas_nb(); // default 64
     int nstreams = get_num_gpu_streams(); // default 8
-
+    nstreams = 64;
     int_t buffer_size = SUPERLU_MIN(max_row_size * max_ncols, sp_ienv_dist(8, options));
     //   get_max_buffer_size());
     doublecomplex* dA, * dB, * dC; // GEMM matrices on device
@@ -944,7 +944,26 @@ pzgstrf(superlu_dist_options_t* options, int m, int n, double anorm,
     streams2 = (gpuStream_t*)SUPERLU_MALLOC(sizeof(gpuStream_t) * nstreams);
     for (i = 0; i < nstreams; ++i)
         checkGPU(gpuStreamCreate(&streams2[i]));
-#endif  
+#endif 
+#ifdef OPT_ZGEMM_ON_GPU
+    doublecomplex* dl_U1, * dl_L1, dl_V;
+    gpublasHandle_t* handle3;
+    gpuStream_t* streams3;
+    if (checkGPU(gpuMalloc((void**)&dl_U1, bigu_size * sizeof(doublecomplex))))
+        ABORT("Malloc fails for zgemm buffer U ");
+    if (checkGPU(gpuMalloc((void**)&dl_L1, bigu_size * sizeof(doublecomplex))))
+        ABORT("Malloc fails for zgemm buffer U ");
+    if (checkGPU(gpuMalloc((void**)&dl_V, bigu_size * sizeof(doublecomplex))))
+        ABORT("Malloc fails for zgemm buffer U ");
+    //create handle
+    handle3 = (gpublasHandle_t*)SUPERLU_MALLOC(sizeof(gpublasHandle_t) * nstreams);
+    for (i = 0; i < nstreams; i++) handle3[i] = create_handle();
+
+    // creating streams
+    streams3 = (gpuStream_t*)SUPERLU_MALLOC(sizeof(gpuStream_t) * nstreams);
+    for (i = 0; i < nstreams; ++i)
+        checkGPU(gpuStreamCreate(&streams3[i]));
+#endif 
 #else  /*-------- not to use GPU --------*/
 
 #if 0  /* Does not use buffer_size on CPU */
@@ -1072,9 +1091,13 @@ pzgstrf(superlu_dist_options_t* options, int m, int n, double anorm,
         double ttt1 = SuperLU_timer_();
 
         /* panel factorization */
+#ifdef OPT_GPU_LPANEL_TRSM
+        PZGSTRF2(options, k0, k, thresh, Glu_persist, grid, Llu,
+            U_diag_blk_send_req, tag_ub, stat, info, dl_U, dl_L, handle2, streams2, nstreams);
+#else
         PZGSTRF2(options, k0, k, thresh, Glu_persist, grid, Llu,
             U_diag_blk_send_req, tag_ub, stat, info);
-
+#endif
         pdgstrf2_timer += SuperLU_timer_() - ttt1;
 
         scp = &grid->rscp;      /* The scope of process row. */
@@ -1199,10 +1222,15 @@ pzgstrf(superlu_dist_options_t* options, int m, int n, double anorm,
                        L blocks and test for exact singularity.  */
                     factored[kk] = 0; /* flag column kk as factored */
                     double ttt1 = SuperLU_timer_();
+#ifdef OPT_GPU_LPANEL_TRSM
+
+                    PZGSTRF2(options, kk0, kk, thresh, Glu_persist,
+                        grid, Llu, U_diag_blk_send_req, tag_ub, stat, info, dl_U, dl_L, handle2, streams2, nstreams);
+#else
 
                     PZGSTRF2(options, kk0, kk, thresh, Glu_persist,
                         grid, Llu, U_diag_blk_send_req, tag_ub, stat, info);
-
+#endif
                     pdgstrf2_timer += SuperLU_timer_() - ttt1;
 
                     /* Multicasts numeric values of L(:,kk) to process rows. */
@@ -1790,9 +1818,16 @@ pzgstrf(superlu_dist_options_t* options, int m, int n, double anorm,
                test for exact singularity.  */
                         factored[kk] = 0; /* flag column kk as factored */
                         double ttt1 = SuperLU_timer_();
+#ifdef OPT_GPU_LPANEL_TRSM
+                        PZGSTRF2(options, kk0, kk, thresh,
+                            Glu_persist, grid, Llu, U_diag_blk_send_req,
+                            tag_ub, stat, info, dl_U, dl_L, handle2, streams2, nstreams);
+#else
+                        
                         PZGSTRF2(options, kk0, kk, thresh,
                             Glu_persist, grid, Llu, U_diag_blk_send_req,
                             tag_ub, stat, info);
+#endif
                         pdgstrf2_timer += SuperLU_timer_() - ttt1;
 
                         /* Process column *kcol+1* multicasts numeric
@@ -1894,9 +1929,8 @@ pzgstrf(superlu_dist_options_t* options, int m, int n, double anorm,
         //        printf("\t* cpuGEMM\t %8.4lf \n", cpuGEMMTimer);
         //#else
 #ifdef GPU_ACC
-        printf(".. Time in GEMM %8.3lf \n", cublasGEMMTimer + cpuGEMMTimer);
-        printf("\t* cublasGEMM\t %8.4lf \n", cublasGEMMTimer);
-        printf("\t* cpuGEMM\t %8.4lf \n", cpuGEMMTimer);
+        //printf(".. Time in GEMM %8.3lf \n", cublasGEMMTimer + cpuGEMMTimer);
+        printf(".. total_gemm_on_gpu timer = %8.3lf\n", gemm_timer);
         printf(".. Time to Scatter %8.4lf \n",scatter_timer);
 #else
         printf(".. Time in GEMM %8.4lf \n",

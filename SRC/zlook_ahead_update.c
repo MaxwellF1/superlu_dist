@@ -224,10 +224,13 @@ while (j < nub && perm_u[2 * j] <= k0 + num_look_aheads)
         factored[kk] = 0;
 
         double tt1 = SuperLU_timer_();
-
+#ifdef OPT_GPU_LPANEL_TRSM
+        PZGSTRF2(options, kk0, kk, thresh, Glu_persist, grid, Llu,
+            U_diag_blk_send_req, tag_ub, stat, info, dl_U, dl_L, handle2, streams2, nstreams);
+#else
         PZGSTRF2(options, kk0, kk, thresh, Glu_persist, grid, Llu,
                   U_diag_blk_send_req, tag_ub, stat, info);
-
+#endif
         pdgstrf2_timer += SuperLU_timer_() - tt1;
 
         /* stat->time7 += SuperLU_timer_() - ttt1; */
