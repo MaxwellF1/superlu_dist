@@ -20,6 +20,7 @@ at the top-level directory.
  */
 
 #define SCHEDULE_STRATEGY dynamic
+#include "nvToolsExt.h"
 
 int full;
 
@@ -186,20 +187,24 @@ if (msg0 && msg2) {  /* L(:,k) and U(k,:) are not empty. */
 #endif/*-- end OPT_gather_avoid -- */
             tt_end = SuperLU_timer_();
             GatherUTimer += tt_end - tt_start;
-#if ( PRNTlevel>= 1)
-            gemm_max_m = SUPERLU_MAX(gemm_max_m, temp_nbrow);
-            gemm_max_n = SUPERLU_MAX(gemm_max_n, ncols);
-            gemm_max_k = SUPERLU_MAX(gemm_max_k, ldu);
-#endif	    
+  
             if (num_streams_used > 0) {
 #ifdef PI_DEBUG
                 printf("nbrow %d *ldu %d  =%d < ldt %d * max_row_size %d =%d \n", nbrow, ldu, nbrow * ldu, ldt, max_row_size, ldt * max_row_size); fflush(stdout);
                 assert(nbrow * ldu <= ldt * max_row_size);
 #endif
+#ifdef NVTX
+                nvtxRangePushA("copy dA");
+#endif
                 gpuMemcpy2DAsync(dA, nbrow * sizeof(doublecomplex),
                     &lusup[luptr + (knsupc - ldu) * nsupr],
                     nsupr * sizeof(doublecomplex), nbrow * sizeof(doublecomplex),
                     ldu, gpuMemcpyHostToDevice, streams[0]);
+               // printf("nbrow = %d, ldu = %d int front\n", nbrow, ldu);
+
+#ifdef NVTX
+                nvtxRangePop();
+#endif
             }
 
             for (int i = 0; i < num_streams_used; ++i) { // streams on GPU
@@ -214,45 +219,65 @@ if (msg0 && msg2) {  /* L(:,k) and U(k,:) are not empty. */
                 /* Following is for testing purpose */
                 if (num_col_stream > 0) {
                     double tt1 = SuperLU_timer_();
+#if ( PRNTlevel>= 1)
+                    gemm_max_m = SUPERLU_MAX(gemm_max_m, nbrow);
+                    gemm_max_n = SUPERLU_MAX(gemm_max_n, num_col_stream);
+                    gemm_max_k = SUPERLU_MAX(gemm_max_k, ldu);
+#endif	  
 #ifdef OPT_GATHER_AVOID
                     //printf("--------------------------------------------------------gather avoid -------------------------\n");
 #ifdef GPU_ACC  /* Sherry: this file is not used if GPU_ACC is not defined. */
+                    if ((long long)nbrow * (long long)num_col_stream * (long long)ldu > 2e5 || (long long)nbrow * (long long)num_col_stream > 2e5
+                        || (long long)num_col_stream * (long long)ldu > 2e5 || (long long)nbrow * (long long)ldu > 2e5)
+                    {
+                        //printf("nbrow = %d, num_col_stream = %d, ldu = %d\n", nbrow, num_col_stream, ldu);
+                        int stream_id = i;
+                        int b_offset = ldu * st_col;
+                        int c_offset = st_col * nbrow;
+                        size_t B_stream_size = ldu * num_col_stream * sizeof(doublecomplex);
+                        size_t C_stream_size = nbrow * num_col_stream * sizeof(doublecomplex);
 
-                    int stream_id = i;
-                    int b_offset = ldu * st_col;
-                    int c_offset = st_col * nbrow;
-                    size_t B_stream_size = ldu * num_col_stream * sizeof(doublecomplex);
-                    size_t C_stream_size = nbrow * num_col_stream * sizeof(doublecomplex);
+                        // Sherry: Check dC buffer of *buffer_size* is large enough
+                        assert(nbrow * (st_col + num_col_stream) < buffer_size);
 
-                    // Sherry: Check dC buffer of *buffer_size* is large enough
-                    assert(nbrow * (st_col + num_col_stream) < buffer_size);
+                        gpuMemcpyAsync(dB + b_offset, U_all.val + b_offset, B_stream_size,
+                            gpuMemcpyHostToDevice, streams[stream_id]);
 
-                    gpuMemcpyAsync(dB + b_offset, U_all.val + b_offset, B_stream_size,
-                        gpuMemcpyHostToDevice, streams[stream_id]);
+                        gpublasCheckErrors(
+                            gpublasSetStream(handle[stream_id],
+                                streams[stream_id])
+                        );
 
-                    gpublasCheckErrors(
-                        gpublasSetStream(handle[stream_id],
-                            streams[stream_id])
-                    );
+                        gpublasCheckErrors(
+                            gpublasZgemm(handle[stream_id],
+                                GPUBLAS_OP_N, GPUBLAS_OP_N,
+                                nbrow, num_col_stream, ldu,
+                                (const gpuDoubleComplex*)&alpha,
+                                (const gpuDoubleComplex*)dA,
+                                nbrow,
+                                (const gpuDoubleComplex*)&dB[b_offset],
+                                ldu,
+                                (const gpuDoubleComplex*)&beta,
+                                (gpuDoubleComplex*)&dC[c_offset],
+                                nbrow)
+                        );
 
-                    gpublasCheckErrors(
-                        gpublasZgemm(handle[stream_id],
-                            GPUBLAS_OP_N, GPUBLAS_OP_N,
-                            nbrow, num_col_stream, ldu,
-                            (const gpuDoubleComplex*)&alpha,
-                            (const gpuDoubleComplex*)dA,
-                            nbrow,
-                            (const gpuDoubleComplex*)&dB[b_offset],
-                            ldu,
-                            (const gpuDoubleComplex*)&beta,
-                            (gpuDoubleComplex*)&dC[c_offset],
-                            nbrow)
-                    );
+                        checkGPU(gpuMemcpyAsync(tempv1, dC + c_offset,
+                            C_stream_size,
+                            gpuMemcpyDeviceToHost,
+                            streams[stream_id]));
+#ifdef NVTX
+                        nvtxRangePop();
 
-                    checkGPU(gpuMemcpyAsync(tempv1, dC + c_offset,
-                        C_stream_size,
-                        gpuMemcpyDeviceToHost,
-                        streams[stream_id]));
+#endif
+                    }
+                    else
+                    {
+                        zgemm_("N", "N", &nbrow, &num_col_stream, &ldu,
+                            &alpha, &lusup[luptr + (knsupc - ldu) * nsupr], 
+                            &nsupr, U_all.val + ldu * st_col, &ldu, &beta,
+                            tempv1, &nbrow, 1, 1);
+                    }
 #else /*-- on CPU --*/
                 }
                 else { // num_col_stream == 0  Sherry: how can get here?
@@ -274,7 +299,9 @@ if (msg0 && msg2) {  /* L(:,k) and U(k,:) are not empty. */
 
                     // Sherry: Check dC buffer of *buffer_size* is large enough
                     assert(nbrow * (st_col + num_col_stream) < buffer_size);
-
+#ifdef NVTX
+                    nvtxRangePushA("Zgemm in zSch");
+#endif
                     gpuMemcpyAsync(dB + b_offset, tempu + b_offset, B_stream_size,
                         gpuMemcpyHostToDevice, streams[stream_id]);
 
@@ -301,8 +328,11 @@ if (msg0 && msg2) {  /* L(:,k) and U(k,:) are not empty. */
                         C_stream_size,
                         gpuMemcpyDeviceToHost,
                         streams[stream_id]));
+#ifdef NVTX
+                    nvtxRangePop();
+#endif
 #else /*-- on CPU --*/
-            }
+                }
                 else { // num_col_stream == 0  Sherry: how can get here?
                     // Sherry: looks like a batched GEMM 
                     my_zgemm_("N", "N", &nbrow, &num_col_stream, &ldu,
@@ -326,13 +356,49 @@ if (msg0 && msg2) {  /* L(:,k) and U(k,:) are not empty. */
 
         double tstart = SuperLU_timer_();
 #if ( PRNTlevel>= 1)
-        gemm_max_m = SUPERLU_MAX(gemm_max_m, temp_nbrow);
-        gemm_max_n = SUPERLU_MAX(gemm_max_n, ncols);
+        gemm_max_m = SUPERLU_MAX(gemm_max_m, nbrow);
+        gemm_max_n = SUPERLU_MAX(gemm_max_n, num_col);
         gemm_max_k = SUPERLU_MAX(gemm_max_k, ldu);
 #endif
-#ifdef OPT_GATHER_AVOID
 
+#ifdef OPT_GATHER_AVOID
+#ifdef OPT_ZGEMM_ON_GPU
+        if ((long long)nbrow * (long long)num_col * (long long)ldu > 3e5 || (long long)nbrow * (long long)num_col > 3e5 ||
+            (long long)num_col * (long long)ldu > 3e5 || (long long)nbrow * (long long)ldu > 3e5)
+        {  //printf("move to gpu\n");
+            //printf("nbrow = %d, num_col = %d, ldu = %d in last\n", nbrow, num_col, ldu);
+            gpublasCheckErrors(cublasSetMatrix(nbrow, ldu, sizeof(cuDoubleComplex), &lusup[luptr + (knsupc - ldu) * nsupr],
+                nsupr, dl_U1, nbrow));
+            gpublasCheckErrors(cublasSetMatrix(ldu, num_col, sizeof(cuDoubleComplex), U_all.val + ldu * st_col, ldu, dl_L1, ldu));
+            cublasHandle_t handle4;
+            cublasCreate(&handle4);
+            gpublasCheckErrors(gpublasZgemm(handle4,
+                GPUBLAS_OP_N, GPUBLAS_OP_N,
+                nbrow, num_col, ldu,
+                (const gpuDoubleComplex*)&alpha,
+                (const gpuDoubleComplex*)dl_U1,
+                nbrow,
+                (const gpuDoubleComplex*)dl_L1,
+                ldu,
+                (const gpuDoubleComplex*)&beta,
+                (gpuDoubleComplex*)dl_V,
+                nbrow)
+            );
+            gpublasCheckErrors(cublasGetMatrix(nbrow, num_col, sizeof(cuDoubleComplex), (const void*)dl_V, nbrow, tempv, nbrow));
+
+            //printf("move to gpu end\n");
+        }
+        else
+        {
+
+           // printf("nbrow = %d, num_col = %d, ldu = %d on cpu\n", nbrow, num_col, ldu);
+            zgemm_("N", "N", &nbrow, &num_col, &ldu, &alpha,
+                &lusup[luptr + (knsupc - ldu) * nsupr], &nsupr,
+                U_all.val + ldu * st_col, &ldu, &beta, tempv, &nbrow, 1, 1);
+        }
+#else
 #if defined (USE_VENDOR_BLAS)
+        //printf("nbrow = %d, num_col = %d, ldu = %d\n", nbrow, num_col, ldu);
         zgemm_("N", "N", &nbrow, &num_col, &ldu, &alpha,
             &lusup[luptr + (knsupc - ldu) * nsupr], &nsupr,
             U_all.val + ldu * st_col, &ldu, &beta, tempv, &nbrow, 1, 1);
@@ -340,6 +406,7 @@ if (msg0 && msg2) {  /* L(:,k) and U(k,:) are not empty. */
         zgemm_("N", "N", &nbrow, &num_col, &ldu, &alpha,
             &lusup[luptr + (knsupc - ldu) * nsupr], &nsupr,
             U_all.val + ldu * st_col, &ldu, &beta, tempv, &nbrow);
+#endif
 #endif
 
 #else
@@ -439,11 +506,7 @@ if (msg0 && msg2) {  /* L(:,k) and U(k,:) are not empty. */
                             printf("cpu scatter \n");
                             printf("A(%d,%d) goes to U block %d \n", ib, jb, ljb);
 #endif
-#if ( PRNTlevel>= 1)
-                            gemm_max_m = SUPERLU_MAX(gemm_max_m, temp_nbrow);
-                            gemm_max_n = SUPERLU_MAX(gemm_max_n, ncols);
-                            gemm_max_k = SUPERLU_MAX(gemm_max_k, ldu);
-#endif
+
                             tempv = tempv1 + cum_nrow;
 #ifdef OPT_SCATTER
                             zscatter_u_opt(
@@ -505,10 +568,10 @@ if (msg0 && msg2) {  /* L(:,k) and U(k,:) are not empty. */
                     } /* for lb ... */
 
                     luptr = luptr0;
-    } /* for j = jjj_st ... */
+                } /* for j = jjj_st ... */
 
-    // TAU_STATIC_TIMER_STOP("SPECIAL_CPU_SCATTER");
-}
+                // TAU_STATIC_TIMER_STOP("SPECIAL_CPU_SCATTER");
+            }
             else { // ncpu_blks >= omp_get_num_threads()
 #ifdef _OPENMP
 #pragma omp for schedule(SCHEDULE_STRATEGY) nowait
@@ -553,11 +616,7 @@ if (msg0 && msg2) {  /* L(:,k) and U(k,:) are not empty. */
                             printf("cpu scatter \n");
                             printf("A(%d,%d) goes to U block %d \n", ib, jb, ljb);
 #endif
-#if ( PRNTlevel>= 1)
-                            gemm_max_m = SUPERLU_MAX(gemm_max_m, temp_nbrow);
-                            gemm_max_n = SUPERLU_MAX(gemm_max_n, ncols);
-                            gemm_max_k = SUPERLU_MAX(gemm_max_k, ldu);
-#endif
+
                             tempv = tempv1 + cum_nrow;
 #ifdef OPT_SCATTER
                             zscatter_u_opt(
@@ -614,10 +673,10 @@ if (msg0 && msg2) {  /* L(:,k) and U(k,:) are not empty. */
                         luptr += temp_nbrow;
                         cum_nrow += temp_nbrow;
 
-                } /* for lb ... */
+                    } /* for lb ... */
 
                     luptr = luptr0;
-            } /* for j = jjj_st ... */
+                } /* for j = jjj_st ... */
             }     /* else (ncpu_blks >= omp_get_num_threads()) */
         }         /* parallel region */
 
@@ -643,7 +702,13 @@ if (msg0 && msg2) {  /* L(:,k) and U(k,:) are not empty. */
             int* indirect2_thread = indirect2 + ldt * thread_id;
             doublecomplex* tempv1;
             for (i = 0; i < num_streams_used; i++) { /* i is private variable */
+#ifdef NVTX
+                nvtxRangePushA("stream Synchronize");
+#endif
                 checkGPU(gpuStreamSynchronize(streams[i]));
+#ifdef NVTX
+                nvtxRangePop();
+#endif
                 // jjj_st1 := first block column on GPU stream[i]
                 int jjj_st1 = (i == 0) ? jjj_st + ncpu_blks : jjj_st + stream_end_col[i - 1];
                 int jjj_end = jjj_st + stream_end_col[i];
@@ -679,7 +744,7 @@ if (msg0 && msg2) {  /* L(:,k) and U(k,:) are not empty. */
 #ifdef DGEMM_STAT
                         if (j == jjj_st) {
                             temp_ncol = full_u_cols[j];
-                    }
+                        }
                         else {
                             temp_ncol = full_u_cols[j] - full_u_cols[j - 1];
                         }
@@ -693,11 +758,7 @@ if (msg0 && msg2) {  /* L(:,k) and U(k,:) are not empty. */
                             printf("A(%d,%d) goes to U block %d \n", ib, jb, ljb);
                             fflush(stdout);
 #endif
-#if ( PRNTlevel>= 1)
-                            gemm_max_m = SUPERLU_MAX(gemm_max_m, temp_nbrow);
-                            gemm_max_n = SUPERLU_MAX(gemm_max_n, ncols);
-                            gemm_max_k = SUPERLU_MAX(gemm_max_k, ldu);
-#endif
+
                             tempv = tempv1 + cum_nrow;
 #ifdef OPT_SCATTER
                             zscatter_u_opt(
@@ -748,7 +809,7 @@ if (msg0 && msg2) {  /* L(:,k) and U(k,:) are not empty. */
                     } /* for lb ... */
 
                     luptr = luptr0;
-            } /* for j = jjj_st ... */
+                } /* for j = jjj_st ... */
 
             } /* end for i = 0 to num_streams_used  */
 
@@ -760,9 +821,9 @@ if (msg0 && msg2) {  /* L(:,k) and U(k,:) are not empty. */
 
         scatter_timer += SuperLU_timer_() - tt1;
 
-        }  /* end while(jjj<nub) */
+    }  /* end while(jjj<nub) */
 
-    } /* if nbrow>0 */
+} /* if nbrow>0 */
 
 }   /* if msg1 and msg 2 */
 

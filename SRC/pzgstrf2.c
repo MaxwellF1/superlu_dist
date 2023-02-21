@@ -322,7 +322,7 @@ pzgstrf2_trsm
         printf("ztrsm diagonal param 11:  %d \n", nsupr);
 #endif
 #ifdef OPT_GPU_LPANEL_TRSM
-        printf("---------------------------\n");
+        //printf("---------------------------\n");
         int stream_id = k0 % (streamnum / 2) * 2;
         //set handle 
         gpublasCheckErrors(gpublasSetStream(handles[stream_id], streams[stream_id]));

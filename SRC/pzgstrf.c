@@ -946,14 +946,15 @@ pzgstrf(superlu_dist_options_t* options, int m, int n, double anorm,
         checkGPU(gpuStreamCreate(&streams2[i]));
 #endif 
 #ifdef OPT_ZGEMM_ON_GPU
-    doublecomplex* dl_U1, * dl_L1, dl_V;
+    doublecomplex* dl_U1, * dl_L1, *dl_V;
     gpublasHandle_t* handle3;
     gpuStream_t* streams3;
-    if (checkGPU(gpuMalloc((void**)&dl_U1, bigu_size * sizeof(doublecomplex))))
+    int size = 20000 * 20000;
+     if (checkGPU(gpuMalloc((void**)&dl_U1, size * sizeof(doublecomplex))))
+         ABORT("Malloc fails for zgemm buffer U ");
+    if (checkGPU(gpuMalloc((void**)&dl_L1, size * sizeof(doublecomplex))))
         ABORT("Malloc fails for zgemm buffer U ");
-    if (checkGPU(gpuMalloc((void**)&dl_L1, bigu_size * sizeof(doublecomplex))))
-        ABORT("Malloc fails for zgemm buffer U ");
-    if (checkGPU(gpuMalloc((void**)&dl_V, bigu_size * sizeof(doublecomplex))))
+    if (checkGPU(gpuMalloc((void**)&dl_V, size * sizeof(doublecomplex))))
         ABORT("Malloc fails for zgemm buffer U ");
     //create handle
     handle3 = (gpublasHandle_t*)SUPERLU_MALLOC(sizeof(gpublasHandle_t) * nstreams);
@@ -1930,8 +1931,9 @@ pzgstrf(superlu_dist_options_t* options, int m, int n, double anorm,
         //#else
 #ifdef GPU_ACC
         //printf(".. Time in GEMM %8.3lf \n", cublasGEMMTimer + cpuGEMMTimer);
-        printf(".. total_gemm_on_gpu timer = %8.3lf\n", gemm_timer);
-        printf(".. Time to Scatter %8.4lf \n",scatter_timer);
+        printf(".. remain_gemm timer = %8.3lf\n", gemm_timer);
+        printf(".. lookahead_gemm timer = %8.3lf\n", NetSchurUpTimer - gemm_timer - scatter_timer);
+        printf(".. Time to Scatter %8.4lf \n", scatter_timer);
 #else
         printf(".. Time in GEMM %8.4lf \n",
             LookAheadGEMMTimer + RemainGEMMTimer);
