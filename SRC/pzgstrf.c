@@ -602,6 +602,12 @@ pzgstrf(superlu_dist_options_t* options, int m, int n, double anorm,
     }
 #endif
 
+#ifdef CHECK_LU
+    printf("------------------------- check -------------------------\n");
+    check_U_is_full(n, LUstruct, grid);
+    check_L_is_ordered(n, LUstruct, grid);
+#endif
+
     nblocks = 0;
     ncb = nsupers / Pc; /* number of column blocks, horizontal */
     nrb = nsupers / Pr; /* number of row blocks, vertical  */

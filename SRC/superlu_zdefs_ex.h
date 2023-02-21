@@ -20,6 +20,12 @@ bool zMatrix_check_symmetry(const zMatrix_t* matirx);
 bool zMatrix_check_transpose(const zMatrix_t* A, const zMatrix_t* B);
 
 // infomation
+void show_options(superlu_dist_options_t* options, gridinfo_t* grid);
+void sort_xlsub_lsub(int_t n, int_t* xlsub, int_t* lsub, Glu_persist_t* Glu_persist, gridinfo_t* grid);
+void sort_xusub_usub(int_t n, int_t* xusub, int_t* usub, Glu_persist_t* Glu_persist, gridinfo_t* grid);
+void show_xlsub_lsub(int_t n, int_t* xlsub, int_t* lsub, Glu_persist_t* Glu_persist, gridinfo_t* grid);
+void show_xusub_usub(int_t n, int_t* xusub, int_t* usub, Glu_persist_t* Glu_persist, gridinfo_t* grid);
+
 void show_supernode_size(int_t n, Glu_persist_t* Glu_persist, gridinfo_t* grid);
 void show_Lindex(int_t k, int_t* Lindex, Glu_persist_t* Glu_persist, gridinfo_t* grid);
 void show_Uindex(int_t k, int_t* Uindex, Glu_persist_t* Glu_persist, gridinfo_t* grid);

@@ -1392,6 +1392,9 @@ doublecomplex *dense, *dense_col; /* SPA */
        dist_symbLU (options, n, Pslu_freeable,
 		    Glu_persist, &xlsub, &lsub, &xusub, &usub,	grid)) > 0)
     return (memStrLU);
+  sort_xlsub_lsub(n, xlsub, lsub, Glu_persist, grid);
+  sort_xusub_usub(n, xusub, usub, Glu_persist, grid);
+
   memDist += (-memStrLU);
   xsup  = Glu_persist->xsup;    /* supernode and column mapping */
   supno = Glu_persist->supno;

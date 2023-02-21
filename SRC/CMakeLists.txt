@@ -26,6 +26,7 @@ set(sources
 #add 
     upanelfact_trsm.c
     zMatrix.c
+    zinformation.c
 #end
   sp_ienv.c
   etree.c 
