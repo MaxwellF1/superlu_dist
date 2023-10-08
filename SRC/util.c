@@ -232,7 +232,7 @@ void set_default_options_dist(superlu_dist_options_t *options)
     options->superlu_n_gemm = 5000;
     options->superlu_max_buffer_size = 256000000;
     options->superlu_num_gpu_streams = 8;
-    options->SymPattern = NO;
+    options->SymPattern = YES;
     options->Algo3d = NO;
 #ifdef SLU_HAVE_LAPACK
     options->DiagInv = YES;

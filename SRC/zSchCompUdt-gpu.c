@@ -363,31 +363,32 @@ if (msg0 && msg2) {  /* L(:,k) and U(k,:) are not empty. */
 
 #ifdef OPT_GATHER_AVOID
 #ifdef OPT_ZGEMM_ON_GPU
-        double t_mnk1 = SuperLU_timer_();
-        const char* commande = "python /share/home/wanghongyu/learn/pexsi/superlu_dist/SRC/python/test.py 100 100 10";
-        FILE* fpipe1 = popen(commande, "r");
-        double t_mnk2 = SuperLU_timer_();
-        if (fpipe1 == NULL)
-        {
-            printf("Failed to open pip:\n");
-            return -1;
-        }
-        else
-        {
-            printf("open MNK tuning\n");
-        }
-        double t_mnk3 = SuperLU_timer_();
-        char buffer[128];
-        int a;
-        while (fgets(buffer, sizeof(buffer), fpipe1) != NULL)
-        {
-            a = (int)(buffer[0] - '0');
-        }
-        double t_mnk4 = SuperLU_timer_();
-        pclose(fpipe1);
-        double t_mnk5 = SuperLU_timer_();
-        printf("time tuing using python %lf, %lf, %lf, %lf\n",t_mnk5 - t_mnk4, t_mnk4 - t_mnk3, t_mnk3 - t_mnk2, t_mnk2 - t_mnk1);
-        printf("--------------------a = %d---------------------\n", a);
+        // double t_mnk1 = SuperLU_timer_();
+        // const char* commande = "python /share/home/wanghongyu/learn/pexsi/superlu_dist/SRC/python/test.py 100 100 10";
+        // FILE* fpipe1 = popen(commande, "r");
+        // double t_mnk2 = SuperLU_timer_();
+        // if (fpipe1 == NULL)
+        // {
+        //     printf("Failed to open pip:\n");
+        //     return -1;
+        // }
+        // else
+        // {
+        //     printf("open MNK tuning\n");
+        // }
+        // double t_mnk3 = SuperLU_timer_();
+        // char buffer[128];
+        // int a;
+        // while (fgets(buffer, sizeof(buffer), fpipe1) != NULL)
+        // {
+        //     a = (int)(buffer[0] - '0');
+        // }
+        // double t_mnk4 = SuperLU_timer_();
+        // pclose(fpipe1);
+        // double t_mnk5 = SuperLU_timer_();
+        // printf("time tuing using python %lf, %lf, %lf, %lf\n",t_mnk5 - t_mnk4, t_mnk4 - t_mnk3, t_mnk3 - t_mnk2, t_mnk2 - t_mnk1);
+        // printf("--------------------a = %d---------------------\n", a);
+        // printf("--------------------GPUGEMMYES!--------------------\n");
         if ((long long)nbrow * (long long)num_col * (long long)ldu > 3e5 || (long long)nbrow * (long long)num_col > 3e5 ||
             (long long)num_col * (long long)ldu > 3e5 || (long long)nbrow * (long long)ldu > 3e5)
         {  //printf("move to gpu\n");
