@@ -1,22 +1,18 @@
 #!/bin/bash
-# source /share/home/wanghongyu/learn/pexsi/build/env.sh
-# export LD_LIBRARY_PATH=/share/app/cuda/cuda-11.6/bin:$LD_LIBRARY_PATH
-# export LD_LIBRARY_PATH=${LD_LIBRARY_PATH//\/usr\/local\/cuda\/compat:/}
-CUDA_HOME=/share/app/cuda/cuda-11.6/
+source /share/home/wanghongyu/learn/pexsi/build/env.sh
+export LD_LIBRARY_PATH=/usr/local/cuda/lib64:$LD_LIBRARY_PATH
+export LD_LIBRARY_PATH=${LD_LIBRARY_PATH//\/usr\/local\/cuda\/compat:/}
+CUDA_HOME=/usr/local/cuda
 export LD_LIBRARY_PATH=$CUDA_HOME/lib64:$LD_LIBRARY_PATH
 export CPATH=$CUDA_HOME/include:$CPATH
 export PATH=$CUDA_HOME/bin:$PATH
-
-export MPI_HOME=/share/app/spack/opt/spack/linux-centos7-cascadelake/gcc-9.5.0/mpich-4.0.2-oyoaemmefwdch6tbtpkc7h56bfmyzoax
-export MPI_LIBRARY_PATH=$MPI_HOME/lib        
-export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$MPI_LIBRARY_PATH
-export CPATH=$MPI_HOME/include:$CPATH
-
 THISHOST=`hostname -s`
 echo "host: $THISHOST"
 
   rm -fr ssg1-build; mkdir ssg1-build; cd ssg1-build;
-  export PARMETIS_ROOT=/share/home/fengguofeng/Software/ParMETIS/parmetis-4.0.3 
+  export PARMETIS_ROOT=/share/home/wanghongyu/learn/pexsi/parmetis-4.0.3 
+#  rm -fr int64-build; mkdir int64-build; cd int64-build;
+#  export PARMETIS_ROOT=~/lib/static/64-bit/parmetis-4.0.3 
   export PARMETIS_BUILD_DIR=${PARMETIS_ROOT}/build/Linux-x86_64
   echo "ParMetis root: $PARMETIS_ROOT"
   cmake .. \
@@ -38,10 +34,10 @@ echo "host: $THISHOST"
     -DBUILD_SHARED_LIBS=OFF \
     -DXSDK_ENABLE_Fortran=OFF \
     -DCMAKE_CUDA_ARCHITECTURES=80 \
-    -DCMAKE_CUDA_FLAGS="-O3 -DOPT_GATHER_AVOID" \
+    -DCMAKE_CUDA_FLAGS="-O3 -DOPT_GATHER_AVOID -I/share/home/wanghongyu/spack/opt/spack/linux-centos7-haswell/gcc-4.8.5/mpich-4.0.2-kaz3kvkaicme5wnjgd6zavsee2ybqkoa/include" \
     -DTPL_ENABLE_CUDALIB=ON \
     -DCUDA_LIBRARIES="/usr/local/cuda/lib64/libcublas.so;/usr/local/cuda/lib64/libcudart.so;/usr/local/cuda/lib64/libcusparse.so" \
-    -DCMAKE_INSTALL_PREFIX="/share/home/fengguofeng/SuperLU/why/superlu_dist"  
+    -DCMAKE_INSTALL_PREFIX="/share/home/wanghongyu/learn/pexsi/superlu_dist_opt"  
     make -j 48 VERBOSE=1 && make install
 
 #    -DXSDK_INDEX_SIZE=64 \

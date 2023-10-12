@@ -11,3 +11,7 @@ build/*
 # not to commit any changes to the following file
 SRC/superlu_FortranCInterface.h
 FORTRAN/superlu_dist_config.fh
+
+include/
+lib64/
+ssg1-build/
