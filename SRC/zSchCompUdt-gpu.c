@@ -389,34 +389,44 @@ if (msg0 && msg2) {  /* L(:,k) and U(k,:) are not empty. */
         // printf("time tuing using python %lf, %lf, %lf, %lf\n",t_mnk5 - t_mnk4, t_mnk4 - t_mnk3, t_mnk3 - t_mnk2, t_mnk2 - t_mnk1);
         // printf("--------------------a = %d---------------------\n", a);
         // printf("--------------------GPUGEMMYES!--------------------\n");
-        if ((long long)nbrow * (long long)num_col * (long long)ldu > 3e5 || (long long)nbrow * (long long)num_col > 3e5 ||
+        if ((long long)nbrow * (long long)num_col * (long long)ldu > 3e5 || (long long)nbrow * (long long)num_col > 3e5 || \
             (long long)num_col * (long long)ldu > 3e5 || (long long)nbrow * (long long)ldu > 3e5)
+        // if(0)
         {  //printf("move to gpu\n");
             //printf("nbrow = %d, num_col = %d, ldu = %d in last\n", nbrow, num_col, ldu);
+            doublecomplex* lusup_d;
+            doublecomplex* U_all_d;
+            doublecomplex* tempv_d;
+            checkGPU(gpuMalloc((void**)&lusup_d, nbrow*ldu*sizeof(doublecomplex)));
+            checkGPU(gpuMalloc((void**)&U_all_d, ldu*num_col*sizeof(doublecomplex)));
+            checkGPU(gpuMalloc((void**)&tempv_d, nbrow*num_col*sizeof(doublecomplex)));
+
             gpublasCheckErrors(cublasSetMatrix(nbrow, ldu, sizeof(cuDoubleComplex), &lusup[luptr + (knsupc - ldu) * nsupr],
-                nsupr, dl_U1, nbrow));
-            gpublasCheckErrors(cublasSetMatrix(ldu, num_col, sizeof(cuDoubleComplex), U_all.val + ldu * st_col, ldu, dl_L1, ldu));
+                nsupr, lusup_d, nbrow));
+            gpublasCheckErrors(cublasSetMatrix(ldu, num_col, sizeof(cuDoubleComplex), U_all.val + ldu * st_col, ldu, U_all_d, ldu));
             cublasHandle_t handle4;
             cublasCreate(&handle4);
             gpublasCheckErrors(gpublasZgemm(handle4,
                 GPUBLAS_OP_N, GPUBLAS_OP_N,
                 nbrow, num_col, ldu,
                 (const gpuDoubleComplex*)&alpha,
-                (const gpuDoubleComplex*)dl_U1,
+                (const gpuDoubleComplex*)lusup_d,
                 nbrow,
-                (const gpuDoubleComplex*)dl_L1,
+                (const gpuDoubleComplex*)U_all_d,
                 ldu,
                 (const gpuDoubleComplex*)&beta,
-                (gpuDoubleComplex*)dl_V,
+                (gpuDoubleComplex*)tempv_d,
                 nbrow)
             );
-            gpublasCheckErrors(cublasGetMatrix(nbrow, num_col, sizeof(cuDoubleComplex), (const void*)dl_V, nbrow, tempv, nbrow));
-
+            gpublasCheckErrors(cublasGetMatrix(nbrow, num_col, sizeof(cuDoubleComplex), (const void*)tempv_d, nbrow, tempv, nbrow));
+            checkGPU(gpuFree(lusup_d));
+            checkGPU(gpuFree(U_all_d));
+            checkGPU(gpuFree(tempv_d));
+            cublasDestroy(handle4);
             //printf("move to gpu end\n");
         }
         else
         {
-
            // printf("nbrow = %d, num_col = %d, ldu = %d on cpu\n", nbrow, num_col, ldu);
             zgemm_("N", "N", &nbrow, &num_col, &ldu, &alpha,
                 &lusup[luptr + (knsupc - ldu) * nsupr], &nsupr,

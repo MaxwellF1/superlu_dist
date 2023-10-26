@@ -15,3 +15,7 @@ FORTRAN/superlu_dist_config.fh
 include/
 lib64/
 ssg1-build/
+INSTALL/
+TEST/
+Testing/
+opt-gpu-build/
