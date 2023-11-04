@@ -716,8 +716,8 @@ if (msg0 && msg2) {  /* L(:,k) and U(k,:) are not empty. */
             }     /* else (ncpu_blks >= omp_get_num_threads()) */
         }         /* parallel region */
 
-        scatter_timer += SuperLU_timer_() - tstart;
-        double tt1 = SuperLU_timer_();
+        LookAheadScatterTimer += SuperLU_timer_() - tstart;
+        tstart = SuperLU_timer_();
         // Scatter tempv(:, (jjj_st1 : jjj_global)) computed on GPU.
 #ifdef _OPENMP
 #pragma omp parallel							\
@@ -855,7 +855,7 @@ if (msg0 && msg2) {  /* L(:,k) and U(k,:) are not empty. */
         } /* end pragma omp parallel */
         // TAU_STATIC_TIMER_STOP("OUTSIDE_OMP");
 
-        scatter_timer += SuperLU_timer_() - tt1;
+        RemainScatterTimer += SuperLU_timer_() - tstart;
 
     }  /* end while(jjj<nub) */
 

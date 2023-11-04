@@ -75,14 +75,14 @@ zscatter_l_opt(
     int_t dest_nbrow = index[lptrj - 1];
 
     assert(dest_nbrow >= temp_nbrow);
-#pragma omp simd
+// #pragma omp simd
 
     for (int i = 0; i < dest_nbrow; ++i) {
         int rel = index[lptrj + i] - fnz;
         indirect_thread[rel] = i;
     }
 
-#pragma omp simd
+// #pragma omp simd
 
     /* can be precalculated? */
     for (int i = 0; i < temp_nbrow; ++i) { /* Source index is a subset of dest. */

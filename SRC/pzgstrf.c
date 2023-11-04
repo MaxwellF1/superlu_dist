@@ -951,26 +951,26 @@ pzgstrf(superlu_dist_options_t* options, int m, int n, double anorm,
     for (i = 0; i < nstreams; ++i)
         checkGPU(gpuStreamCreate(&streams2[i]));
 #endif 
-#ifdef OPT_ZGEMM_ON_GPU
-    doublecomplex* dl_U1, * dl_L1, *dl_V;
-    gpublasHandle_t* handle3;
-    gpuStream_t* streams3;
-    int size = 20000 * 20000;
-     if (checkGPU(gpuMalloc((void**)&dl_U1, size * sizeof(doublecomplex))))
-         ABORT("Malloc fails for zgemm buffer U ");
-    if (checkGPU(gpuMalloc((void**)&dl_L1, size * sizeof(doublecomplex))))
-        ABORT("Malloc fails for zgemm buffer U ");
-    if (checkGPU(gpuMalloc((void**)&dl_V, size * sizeof(doublecomplex))))
-        ABORT("Malloc fails for zgemm buffer U ");
-    //create handle
-    handle3 = (gpublasHandle_t*)SUPERLU_MALLOC(sizeof(gpublasHandle_t) * nstreams);
-    for (i = 0; i < nstreams; i++) handle3[i] = create_handle();
+// #ifdef OPT_ZGEMM_ON_GPU
+//     doublecomplex* dl_U1, * dl_L1, *dl_V;
+//     gpublasHandle_t* handle3;
+//     gpuStream_t* streams3;
+//     int size = 20000 * 20000;
+//      if (checkGPU(gpuMalloc((void**)&dl_U1, size * sizeof(doublecomplex))))
+//          ABORT("Malloc fails for zgemm buffer U ");
+//     if (checkGPU(gpuMalloc((void**)&dl_L1, size * sizeof(doublecomplex))))
+//         ABORT("Malloc fails for zgemm buffer U ");
+//     if (checkGPU(gpuMalloc((void**)&dl_V, size * sizeof(doublecomplex))))
+//         ABORT("Malloc fails for zgemm buffer U ");
+//     //create handle
+//     handle3 = (gpublasHandle_t*)SUPERLU_MALLOC(sizeof(gpublasHandle_t) * nstreams);
+//     for (i = 0; i < nstreams; i++) handle3[i] = create_handle();
 
-    // creating streams
-    streams3 = (gpuStream_t*)SUPERLU_MALLOC(sizeof(gpuStream_t) * nstreams);
-    for (i = 0; i < nstreams; ++i)
-        checkGPU(gpuStreamCreate(&streams3[i]));
-#endif 
+//     // creating streams
+//     streams3 = (gpuStream_t*)SUPERLU_MALLOC(sizeof(gpuStream_t) * nstreams);
+//     for (i = 0; i < nstreams; ++i)
+//         checkGPU(gpuStreamCreate(&streams3[i]));
+// #endif 
 #else  /*-------- not to use GPU --------*/
 
 #if 0  /* Does not use buffer_size on CPU */
@@ -1937,9 +1937,12 @@ pzgstrf(superlu_dist_options_t* options, int m, int n, double anorm,
         //#else
 #ifdef GPU_ACC
         //printf(".. Time in GEMM %8.3lf \n", cublasGEMMTimer + cpuGEMMTimer);
-        printf(".. remain_gemm timer = %8.3lf\n", gemm_timer);
-        printf(".. lookahead_gemm timer = %8.3lf\n", NetSchurUpTimer - gemm_timer - scatter_timer);
-        printf(".. Time to Scatter %8.4lf \n", scatter_timer);
+        printf(".. Time in GEMM %8.4lf\n", gemm_timer);
+        // printf(".. lookahead_gemm timer = %8.3lf\n", NetSchurUpTimer - gemm_timer - scatter_timer);
+        printf(".. Time to Scatter %8.4lf \n",
+            LookAheadScatterTimer + RemainScatterTimer);
+        printf("\t* CPU Scatter\t %8.4lf \n", LookAheadScatterTimer);
+        printf("\t* GPU Scatter\t %8.4lf \n", RemainScatterTimer);
 #else
         printf(".. Time in GEMM %8.4lf \n",
             LookAheadGEMMTimer + RemainGEMMTimer);
