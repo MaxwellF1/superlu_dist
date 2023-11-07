@@ -19,3 +19,5 @@ INSTALL/
 TEST/
 Testing/
 opt-gpu-build/
+run_cmake_build-opt-all-add-cublas-ict.sh
+.vscode

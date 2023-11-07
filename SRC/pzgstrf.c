@@ -238,6 +238,12 @@ superlu_sort_perm(const void* arg1, const void* arg2)
  *             system of equations.
  * </pre>
  */
+double Scatter_search_timer = 0.0;
+double Scatter_sub_timer = 0.0;
+double Scatter_trans_timer = 0.0;
+double Scatter_indirect_timer = 0.0;
+double Scatter_other_timer_l = 0.0;
+double Scatter_other_timer_u = 0.0;
 int_t
 pzgstrf(superlu_dist_options_t* options, int m, int n, double anorm,
     zLUstruct_t* LUstruct, gridinfo_t* grid, SuperLUStat_t* stat, int* info)
@@ -1943,6 +1949,12 @@ pzgstrf(superlu_dist_options_t* options, int m, int n, double anorm,
             LookAheadScatterTimer + RemainScatterTimer);
         printf("\t* CPU Scatter\t %8.4lf \n", LookAheadScatterTimer);
         printf("\t* GPU Scatter\t %8.4lf \n", RemainScatterTimer);
+        printf("\t* Scatter Search\t %8.4lf \n",Scatter_search_timer);
+        printf("\t* Scatter Sub\t %8.4lf \n",Scatter_sub_timer);
+        printf("\t* Scatter Trans\t %8.4lf \n",Scatter_trans_timer);
+        printf("\t* Scatter Indirect\t %8.4lf \n",Scatter_indirect_timer);
+        printf("\t* Scatter Others L\t %8.4lf \n",Scatter_other_timer_l);
+        printf("\t* Scatter Others U\t %8.4lf \n",Scatter_other_timer_u);
 #else
         printf(".. Time in GEMM %8.4lf \n",
             LookAheadGEMMTimer + RemainGEMMTimer);
