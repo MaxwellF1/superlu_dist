@@ -492,7 +492,9 @@ if (msg0 && msg2) {  /* L(:,k) and U(k,:) are not empty. */
 
             if (ncpu_blks < num_threads) {
                 // TAU_STATIC_TIMER_START("SPECIAL_CPU_SCATTER");
-
+#ifdef _OPENMP /*Guofeng changed the omp para for level to the outer loop*/
+#pragma omp for schedule( SCHEDULE_STRATEGY ) nowait
+#endif
                 for (j = jjj_st; j < jjj_st + ncpu_blks; ++j) {
                     /* code */
 #ifdef PI_DEBUG
@@ -513,9 +515,15 @@ if (msg0 && msg2) {  /* L(:,k) and U(k,:) are not empty. */
                     lptr = lptr0;
                     luptr = luptr0;
 
-#ifdef _OPENMP
-#pragma omp for schedule( SCHEDULE_STRATEGY ) nowait
-#endif
+                    int_t lptrj_now = BC_HEADER;
+                    int_t luptrj_now = 0;
+
+                    int_t iuip_lib_now = BR_HEADER;
+                    int_t ruip_lib_now = 0;
+
+// #ifdef _OPENMP /*Guofeng changed the omp para for level to the outer loop*/
+// #pragma omp for schedule( SCHEDULE_STRATEGY ) nowait
+// #endif
                     for (lb = 0; lb < nlb; lb++) {
                         int cum_nrow = 0;
                         int temp_nbrow;
@@ -544,8 +552,9 @@ if (msg0 && msg2) {  /* L(:,k) and U(k,:) are not empty. */
 #endif
 
                             tempv = tempv1 + cum_nrow;
-#ifdef OPT_SCATTER
-                            zscatter_u_opt(
+#ifdef OPT_SCATTER          
+                            ptr_pair_t tmp_pair_ptr;
+                            tmp_pair_ptr = zscatter_u_opt_search_moveptr(
                                 ib, jb,
                                 nsupc, iukp, xsup,
                                 klst, nbrow,
@@ -554,8 +563,11 @@ if (msg0 && msg2) {  /* L(:,k) and U(k,:) are not empty. */
                                 Ufstnz_br_ptr,
                                 Unzval_br_ptr,
                                 grid,
-                                options
+                                iuip_lib_now,
+                                ruip_lib_now
                             );
+                            // iuip_lib_now = tmp_pair_ptr.ptr;
+                            // ruip_lib_now = tmp_pair_ptr.uptr;
 #else
 
                             zscatter_u(
@@ -580,12 +592,16 @@ if (msg0 && msg2) {  /* L(:,k) and U(k,:) are not empty. */
                             tempv = tempv1 + cum_nrow;
 
 #ifdef OPT_SCATTER
-                            zscatter_l_opt(
+                            ptr_pair_t tmp_pair_ptr;
+                            tmp_pair_ptr = zscatter_l_opt_search_moveptr(
                                 ib, ljb, nsupc, iukp, xsup, klst, nbrow, lptr,
                                 temp_nbrow, usub, lsub, tempv,
                                 indirect_thread, indirect2_thread,
-                                Lrowind_bc_ptr, Lnzval_bc_ptr, grid, options
+                                Lrowind_bc_ptr, Lnzval_bc_ptr, grid,
+                                lptrj_now, luptrj_now
                             );
+                            lptrj_now = tmp_pair_ptr.ptr;
+                            luptrj_now = tmp_pair_ptr.uptr;
 #else
 
                             zscatter_l(
@@ -630,6 +646,12 @@ if (msg0 && msg2) {  /* L(:,k) and U(k,:) are not empty. */
                     lptr = lptr0;
                     luptr = luptr0;
 
+                    int_t lptrj_now = BC_HEADER;
+                    int_t luptrj_now = 0;
+
+                    int_t iuip_lib_now = BR_HEADER;
+                    int_t ruip_lib_now = 0;
+
                     for (lb = 0; lb < nlb; lb++) {
                         ib = lsub[lptr];       /* Row block L(i,k). */
                         temp_nbrow = lsub[lptr + 1];  /* Number of full rows. */
@@ -655,7 +677,8 @@ if (msg0 && msg2) {  /* L(:,k) and U(k,:) are not empty. */
 
                             tempv = tempv1 + cum_nrow;
 #ifdef OPT_SCATTER
-                            zscatter_u_opt(
+                            ptr_pair_t tmp_pair_ptr;
+                            tmp_pair_ptr = zscatter_u_opt_search_moveptr(
                                 ib, jb,
                                 nsupc, iukp, xsup,
                                 klst, nbrow,
@@ -664,8 +687,11 @@ if (msg0 && msg2) {  /* L(:,k) and U(k,:) are not empty. */
                                 Ufstnz_br_ptr,
                                 Unzval_br_ptr,
                                 grid,
-                                options
+                                iuip_lib_now,
+                                ruip_lib_now
                             );
+                            // iuip_lib_now = tmp_pair_ptr.ptr;
+                            // ruip_lib_now = tmp_pair_ptr.uptr;
 #else
 
                             zscatter_u(
@@ -688,14 +714,17 @@ if (msg0 && msg2) {  /* L(:,k) and U(k,:) are not empty. */
                             tempv = tempv1 + cum_nrow;
 
 #ifdef OPT_SCATTER
-                            zscatter_l_opt(
+                            ptr_pair_t tmp_pair_ptr;
+                             tmp_pair_ptr = zscatter_l_opt_search_moveptr(
                                 ib, ljb, nsupc, iukp, xsup, klst, nbrow, lptr,
                                 temp_nbrow, usub, lsub, tempv,
                                 indirect_thread, indirect2_thread,
-                                Lrowind_bc_ptr, Lnzval_bc_ptr, grid, options
+                                Lrowind_bc_ptr, Lnzval_bc_ptr, grid,
+                                lptrj_now, luptrj_now
                             );
+                            lptrj_now = tmp_pair_ptr.ptr;
+                            luptrj_now = tmp_pair_ptr.uptr;
 #else
-
                             zscatter_l(
                                 ib, ljb, nsupc, iukp, xsup, klst, nbrow, lptr,
                                 temp_nbrow, usub, lsub, tempv,
@@ -771,6 +800,13 @@ if (msg0 && msg2) {  /* L(:,k) and U(k,:) are not empty. */
            block of U */
                     lptr = lptr0;
                     luptr = luptr0;
+
+                    int_t lptrj_now = BC_HEADER;
+                    int_t luptrj_now = 0;
+
+                    int_t iuip_lib_now = BR_HEADER;
+                    int_t ruip_lib_now = 0;
+
                     for (lb = 0; lb < nlb; lb++) {
                         ib = lsub[lptr];       /* Row block L(i,k). */
                         temp_nbrow = lsub[lptr + 1];  /* Number of full rows. */
@@ -797,7 +833,8 @@ if (msg0 && msg2) {  /* L(:,k) and U(k,:) are not empty. */
 
                             tempv = tempv1 + cum_nrow;
 #ifdef OPT_SCATTER
-                            zscatter_u_opt(
+                            ptr_pair_t tmp_pair_ptr;
+                            tmp_pair_ptr = zscatter_u_opt_search_moveptr(
                                 ib, jb,
                                 nsupc, iukp, xsup,
                                 klst, nbrow,
@@ -806,8 +843,11 @@ if (msg0 && msg2) {  /* L(:,k) and U(k,:) are not empty. */
                                 Ufstnz_br_ptr,
                                 Unzval_br_ptr,
                                 grid,
-                                options
+                                iuip_lib_now,
+                                ruip_lib_now
                             );
+                            // iuip_lib_now = tmp_pair_ptr.ptr;
+                            // ruip_lib_now = tmp_pair_ptr.uptr;
 #else
                             zscatter_u(
                                 ib, jb,
@@ -829,13 +869,25 @@ if (msg0 && msg2) {  /* L(:,k) and U(k,:) are not empty. */
 #endif
 
                             tempv = tempv1 + cum_nrow;
-
+#ifdef OPT_SCATTER
+                            ptr_pair_t tmp_pair_ptr;
+                            tmp_pair_ptr = zscatter_l_opt_search_moveptr(
+                                ib, ljb, nsupc, iukp, xsup, klst, nbrow, lptr,
+                                temp_nbrow, usub, lsub, tempv,
+                                indirect_thread, indirect2_thread,
+                                Lrowind_bc_ptr, Lnzval_bc_ptr, grid,
+                                lptrj_now, luptrj_now
+                            );
+                            lptrj_now = tmp_pair_ptr.ptr;
+                            luptrj_now = tmp_pair_ptr.uptr;                           
+#else
                             zscatter_l(
                                 ib, ljb, nsupc, iukp, xsup, klst, nbrow, lptr,
                                 temp_nbrow, usub, lsub, tempv,
                                 indirect_thread, indirect2_thread,
                                 Lrowind_bc_ptr, Lnzval_bc_ptr, grid
                             );
+#endif
                         } /* if ib < jb ... */
 
                         lptr += temp_nbrow;

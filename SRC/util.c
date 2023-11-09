@@ -1308,6 +1308,8 @@ int_t reduceStat(PhaseType PHASE,
 
 #define GPUMM_MIN_K 64  // minimum size of k formatrix multiplication on GPUs
 #define GPUMM_MIN_MN 256*256     //minimum size of M\times N for matrix multiplication offload on GPUs
+// #define GPUMM_MIN_K 1  // minimum size of k formatrix multiplication on GPUs
+// #define GPUMM_MIN_MN 1*1   //minimum size of M\times N for matrix multiplication offload on GPUs
 
 /*
  * Divide GEMM on GPU into multiple streams, each having sufficent work.

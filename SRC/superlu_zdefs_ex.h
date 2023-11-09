@@ -43,7 +43,50 @@ void upanelfact_trsm(int_t k0, int_t k, Glu_persist_t* Glu_persist, gridinfo_t* 
 
 
 #endif
-void zscatter_l_opt(
+typedef struct{
+    int_t ptr;
+    int_t uptr;
+}ptr_pair_t;
+
+ptr_pair_t zscatter_l_opt(
+    int ib,         /* row block number of source block L(i,k) */
+    int ljb,        /* local column block number of dest. block L(i,j) */
+    int nsupc,      /* number of columns in destination supernode */
+    int_t iukp,     /* point to destination supernode's index[] */
+    int_t* xsup,
+    int klst,
+    int nbrow,      /* LDA of the block in tempv[] */
+    int_t lptr,     /* Input, point to index[] location of block L(i,k) */
+    int temp_nbrow, /* number of rows of source block L(i,k) */
+    int_t* usub,
+    int_t* lsub,
+    doublecomplex* tempv,
+    int* indirect_thread, int* indirect2,
+    int_t** Lrowind_bc_ptr, doublecomplex** Lnzval_bc_ptr,
+    gridinfo_t* grid,
+    int_t lptrj_now, 
+    int_t luptrj_now);
+
+ptr_pair_t
+zscatter_u_opt(
+    int ib,
+    int jb,
+    int nsupc,
+    int_t iukp,
+    int_t* xsup,
+    int klst,
+    int nbrow,      /* LDA of the block in tempv[] */
+    int_t lptr,     /* point to index location of block L(i,k) */
+    int temp_nbrow, /* number of rows of source block L(i,k) */
+    int_t* lsub,
+    int_t* usub,
+    doublecomplex* tempv,
+    int_t** Ufstnz_br_ptr, doublecomplex** Unzval_br_ptr,
+    gridinfo_t* grid,
+    int_t iuip_lib_now,
+    int_t ruip_lib_now);
+
+ptr_pair_t zscatter_l_opt_search_moveptr(
     int ib,    /* row block number of source block L(i,k) */
     int ljb,   /* local column block number of dest. block L(i,j) */
     int nsupc, /* number of columns in destination supernode */
@@ -59,10 +102,10 @@ void zscatter_l_opt(
     int* indirect_thread, int* indirect2,
     int_t** Lrowind_bc_ptr, doublecomplex** Lnzval_bc_ptr,
     gridinfo_t* grid,
-    superlu_dist_options_t* options);
+    int_t lptrj_now,
+    int_t luptrj_now);
 
-void zscatter_u_opt(
-    int ib,
+ptr_pair_t zscatter_u_opt_search_moveptr(int ib,
     int jb,
     int nsupc,
     int_t iukp,
@@ -76,7 +119,9 @@ void zscatter_u_opt(
     doublecomplex* tempv,
     int_t** Ufstnz_br_ptr, doublecomplex** Unzval_br_ptr,
     gridinfo_t* grid,
-    superlu_dist_options_t* options);
+    int_t iuip_lib_now,
+    int_t ruip_lib_now);
+
 #ifdef GPU_ACC
 #ifdef __cplusplus
 extern "C" {

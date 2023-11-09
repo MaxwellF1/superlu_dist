@@ -560,7 +560,7 @@ dist_symbLU (superlu_dist_options_t *options, int_t n,
     else
       nnzToRecv[iam] = nnz_loc_u;
 
-#if ( PRNTlevel>=1 )
+#if ( DEBUGlevel>=1 )
     if (iam==0) {
 	printf("\t.dist_symbLU [1] memAux %.2f, memRet %.2f (MB)\n", memAux*1e-6, memRet*1e-6);
 	fflush(stdout);
@@ -658,7 +658,7 @@ dist_symbLU (superlu_dist_options_t *options, int_t n,
 
     /* Sherry: this loop goes around twice ? */
     
-#if ( PRNTlevel>=1 )
+#if ( DEBUGlevel>=1 )
     if (iam==0) {
 	printf("\t.dist_symbLU [2] end while: memAux %.4f\t memRet %.4f (MB)\n", memAux*1e-6, memRet*1e-6);
 	fflush(stdout);
@@ -692,7 +692,7 @@ dist_symbLU (superlu_dist_options_t *options, int_t n,
   *p_xlsub = xlsub_n; *p_lsub = lsub_n;
   *p_xusub = xusub_n; *p_usub = usub_n;
 
-#if ( PRNTlevel>=1 )
+#if ( DEBUGlevel>=1 )
     if (iam==0) {
 	printf("\t.dist_symbLU [3] before return: memAux %.4f\t memRet %.4f (MB)\n", memAux*1e-6, memRet*1e-6);
 	fflush(stdout);
@@ -1520,7 +1520,7 @@ doublecomplex *dense, *dense_col; /* SPA */
   memTRS += 2 * nsupers_i * sizeof(long int);
 
   memNLU += nsupers_i*sizeof(doublecomplex*) + nsupers_i*sizeof(int_t*);
-#if ( PRNTlevel>=1 )  
+#if ( DEBUGlevel>=1 )  
   if (iam==0) {
       printf("\t.zdist_psymbtonum [1] memDist %.4f, memNLU %.4f\n", memDist*1e-6, memNLU*1e-6);
   }
@@ -1566,7 +1566,7 @@ doublecomplex *dense, *dense_col; /* SPA */
   /* ------------------------------------------------ */
   memNLU += 2*nsupers_i*iword +
     SUPERLU_MAX(ldaspa, ldaspa_j)*sp_ienv_dist(3, options)*dword;
-#if ( PRNTlevel>=1 )    
+#if ( DEBUGlevel>=1 )    
   if (iam==0) {
       printf("\t.zdist_psymbtonum [[2]] memDist %.2f, memNLU %.2f [+ dense SPA]\n", memDist*1e-6, memNLU*1e-6);
       fflush(stdout);
@@ -1640,7 +1640,7 @@ doublecomplex *dense, *dense_col; /* SPA */
   	     + 5 * nsupers_j * sizeof(long int);
 
   memNLU += nsupers_j * sizeof(double*) + nsupers_j * sizeof(int_t*)+ nsupers_j * sizeof(int_t*);
-#if ( PRNTlevel>=1 )  
+#if ( DEBUGlevel>=1 )  
   if (iam==0) {
       printf("\t.zdist_psymbtonum [[3]] memNLU %.2f, memTRS %.2f\n", memNLU*1e-6, memTRS*1e-6);
       fflush(stdout);
@@ -1679,7 +1679,7 @@ doublecomplex *dense, *dense_col; /* SPA */
     bsendx_plist[i] = &index1[j];
   /* -------------------------------------------------------------- */
   memNLU += 2*nsupers_j*sizeof(int_t*) + 2*len*iword;
-#if ( PRNTlevel>=1 )
+#if ( DEBUGlevel>=1 )
   if (iam==0) {
       printf("\t.zdist_psymbtonum [[4]] memNLU %.2f, memTRS %.2f\n", memNLU*1e-6, memTRS*1e-6);
       fflush(stdout);
@@ -1813,7 +1813,7 @@ doublecomplex *dense, *dense_col; /* SPA */
 	Unzval_br_cnt += Unzval_br_offset[ljb_i];
 	
 	memNLU += (len1+1)*iword + len*dword;
-#if ( PRNTlevel>=1 )	
+#if ( DEBUGlevel>=1 )	
 	if (iam==0 && (jb %10000 == 0) ) {
 	    printf("\t.zdist_psymbtonum [jb %d setup-U] memNLU %.4f, memTRS %.4f\n",
 	    			(int) jb, memNLU*1e-6, memTRS*1e-6);
@@ -3310,7 +3310,7 @@ doublecomplex *dense, *dense_col; /* SPA */
   CHECK_MALLOC(iam, "Exit zdist_psymbtonum()");
 #endif
 
-#if ( PRNTlevel>=1 )
+#if ( DEBUGlevel>=1 )
   if (iam==0) {
       printf("\t. end zdist_psymbtonum: memDist %.4f, memNLU %.4f, memTRS %.2f\n",
       		  memDist*1e-6, memNLU*1e-6, memTRS*1e-6);
