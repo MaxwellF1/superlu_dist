@@ -168,6 +168,7 @@ superlu_sort_perm(const void* arg1, const void* arg2)
 /************************************************************************/
 
 #include "zscatter.c"
+#include "uthash.c"
 
 /************************************************************************/
 
@@ -244,6 +245,11 @@ double Scatter_trans_timer = 0.0;
 double Scatter_indirect_timer = 0.0;
 double Scatter_other_timer_l = 0.0;
 double Scatter_other_timer_u = 0.0;
+
+double Schur_scatter_timer_l = 0.0;
+double Schur_scatter_timer_u = 0.0;
+double Schur_scatter_timer_others = 0.0;
+double Schur_scatter_timer_tot = 0.0;
 int_t
 pzgstrf(superlu_dist_options_t* options, int m, int n, double anorm,
     zLUstruct_t* LUstruct, gridinfo_t* grid, SuperLUStat_t* stat, int* info)
@@ -773,7 +779,7 @@ pzgstrf(superlu_dist_options_t* options, int m, int n, double anorm,
     ToRecv = Llu->ToRecv;
     ToSendD = Llu->ToSendD;
     ToSendR = Llu->ToSendR;
-
+    long int Lrowind_bc_cnt = Llu->Lrowind_bc_cnt;
     ldt = sp_ienv_dist(3, options); /* Size of maximum supernode */
     k = CEILING(nsupers, Pr);       /* Number of local block rows */
 
@@ -1954,6 +1960,10 @@ pzgstrf(superlu_dist_options_t* options, int m, int n, double anorm,
         printf("\t* Scatter Indirect\t %8.4lf \n",Scatter_indirect_timer);
         printf("\t* Scatter Others L\t %8.4lf \n",Scatter_other_timer_l);
         printf("\t* Scatter Others U\t %8.4lf \n",Scatter_other_timer_u);
+        printf("\t* Scatter L\t %8.4lf \n",Schur_scatter_timer_l);
+        printf("\t* Scatter U\t %8.4lf \n",Schur_scatter_timer_u);
+        printf("\t* Scatter Others\t %8.4lf \n",Schur_scatter_timer_others);
+        printf("\t* Scatter Tot\t %8.4lf \n",Schur_scatter_timer_tot);
 #else
         printf(".. Time in GEMM %8.4lf \n",
             LookAheadGEMMTimer + RemainGEMMTimer);

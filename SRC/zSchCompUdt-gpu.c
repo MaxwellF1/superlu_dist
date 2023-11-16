@@ -21,6 +21,10 @@ at the top-level directory.
 
 #define SCHEDULE_STRATEGY dynamic
 #include "nvToolsExt.h"
+#include "uthash.h"
+// #include "ittnotify.h"
+
+// #define TIMER_SCATTER
 
 int full;
 
@@ -155,7 +159,7 @@ if (msg0 && msg2) {  /* L(:,k) and U(k,:) are not empty. */
             zMatrix_init(&U_all, ldu, ncols, ldu, &uval[Ublock_info[jjj_st].rukp]);
 #else
 #ifdef _OPENMP
-#pragma omp for schedule( SCHEDULE_STRATEGY )
+#pragma omp for schedule(SCHEDULE_STRATEGY)
 #endif
             /* Copy U segments into tempu, up to jjj_global block */
             for (j = jjj_st; j < jjj; ++j) {
@@ -490,12 +494,21 @@ if (msg0 && msg2) {  /* L(:,k) and U(k,:) are not empty. */
             int* indirect2_thread = indirect2 + ldt * thread_id;
             doublecomplex* tempv1;
 
+
             if (ncpu_blks < num_threads) {
                 // TAU_STATIC_TIMER_START("SPECIAL_CPU_SCATTER");
 #ifdef _OPENMP /*Guofeng changed the omp para for level to the outer loop*/
-#pragma omp for schedule( SCHEDULE_STRATEGY ) nowait
+#pragma omp for schedule(SCHEDULE_STRATEGY) nowait
 #endif
                 for (j = jjj_st; j < jjj_st + ncpu_blks; ++j) {
+
+                    #ifdef TIMER_SCATTER
+                    double timer_1 = 0.0;
+                    if(thread_id == 0){
+                        timer_1 = SuperLU_timer_();
+                    } 
+                    #endif
+
                     /* code */
 #ifdef PI_DEBUG
                     printf("scattering block column %d, jjj_st, jjj_st+ncpu_blks\n", j, jjj_st, jjj_st + ncpu_blks);
@@ -515,16 +528,41 @@ if (msg0 && msg2) {  /* L(:,k) and U(k,:) are not empty. */
                     lptr = lptr0;
                     luptr = luptr0;
 
+                    #ifdef OPT_SCATTER
                     int_t lptrj_now = BC_HEADER;
                     int_t luptrj_now = 0;
+                    int_t lid_now = 0;
+                    int_t* index_tmp = Lrowind_bc_ptr[ljb];
+                    int num_lblk = index_tmp[0];
+                    int num_lrow = index_tmp[1];
+                    // Separate infos to keep locality
+                    int_t l_gid[num_lblk];
+                    int_t l_ptr[num_lblk];
+                    int_t l_uptr[num_lblk];
+                    for(int i = 0; i < num_lblk; i++){
+                        l_gid[i] = index_tmp[lptrj_now];
+                        l_uptr[i] = luptrj_now;
+                        l_ptr[i] = lptrj_now;
+                        luptrj_now += index_tmp[lptrj_now + 1];
+                        lptrj_now += LB_DESCRIPTOR + index_tmp[lptrj_now + 1];
+                    }
 
                     int_t iuip_lib_now = BR_HEADER;
                     int_t ruip_lib_now = 0;
+                    #endif
+
+                    #ifdef TIMER_SCATTER
+                    if(thread_id == 0) Schur_scatter_timer_others += (SuperLU_timer_()-timer_1);
+                    #endif
 
 // #ifdef _OPENMP /*Guofeng changed the omp para for level to the outer loop*/
-// #pragma omp for schedule( SCHEDULE_STRATEGY ) nowait
+// #pragma omp for schedule(SCHEDULE_STRATEGY) nowait
 // #endif
                     for (lb = 0; lb < nlb; lb++) {
+                        #ifdef TIMER_SCATTER
+                        if(thread_id == 0) timer_1 = SuperLU_timer_();
+                        #endif
+
                         int cum_nrow = 0;
                         int temp_nbrow;
                         lptr = lptr0;
@@ -543,6 +581,9 @@ if (msg0 && msg2) {  /* L(:,k) and U(k,:) are not empty. */
                         assert(temp_nbrow <= nbrow);
 
                         lptr += LB_DESCRIPTOR; /* Skip descriptor. */
+                        #ifdef TIMER_SCATTER
+                        if(thread_id == 0) Schur_scatter_timer_others += (SuperLU_timer_()-timer_1);
+                        #endif
 
                         /* Now gather the result into the destination block. */
                         if (ib < jb) {  /* A(i,j) is in U. */
@@ -552,9 +593,27 @@ if (msg0 && msg2) {  /* L(:,k) and U(k,:) are not empty. */
 #endif
 
                             tempv = tempv1 + cum_nrow;
+
+                            #ifdef TIMER_SCATTER
+                            if(thread_id == 0) timer_1 = SuperLU_timer_();
+                            #endif
 #ifdef OPT_SCATTER          
-                            ptr_pair_t tmp_pair_ptr;
-                            tmp_pair_ptr = zscatter_u_opt_search_moveptr(
+                            // ptr_pair_t tmp_pair_ptr;
+                            // tmp_pair_ptr = zscatter_u_opt_search_moveptr(
+                            //     ib, jb,
+                            //     nsupc, iukp, xsup,
+                            //     klst, nbrow,
+                            //     lptr, temp_nbrow, lsub,
+                            //     usub, tempv,
+                            //     Ufstnz_br_ptr,
+                            //     Unzval_br_ptr,
+                            //     grid,
+                            //     iuip_lib_now,
+                            //     ruip_lib_now
+                            // );
+                            // iuip_lib_now = tmp_pair_ptr.ptr;
+                            // ruip_lib_now = tmp_pair_ptr.uptr;
+                            zscatter_u(
                                 ib, jb,
                                 nsupc, iukp, xsup,
                                 klst, nbrow,
@@ -562,12 +621,8 @@ if (msg0 && msg2) {  /* L(:,k) and U(k,:) are not empty. */
                                 usub, tempv,
                                 Ufstnz_br_ptr,
                                 Unzval_br_ptr,
-                                grid,
-                                iuip_lib_now,
-                                ruip_lib_now
+                                grid
                             );
-                            // iuip_lib_now = tmp_pair_ptr.ptr;
-                            // ruip_lib_now = tmp_pair_ptr.uptr;
 #else
 
                             zscatter_u(
@@ -581,6 +636,9 @@ if (msg0 && msg2) {  /* L(:,k) and U(k,:) are not empty. */
                                 grid
                             );
 #endif
+                            #ifdef TIMER_SCATTER
+                            if(thread_id == 0) Schur_scatter_timer_u += (SuperLU_timer_()-timer_1);
+                            #endif
 
                         }
                         else {    /* A(i,j) is in L. */
@@ -588,20 +646,30 @@ if (msg0 && msg2) {  /* L(:,k) and U(k,:) are not empty. */
                             printf("cpu scatter \n");
                             printf("A(%d,%d) goes to L block %d \n", ib, jb, ljb);
 #endif
-
-                            tempv = tempv1 + cum_nrow;
+                            #ifdef TIMER_SCATTER
+                            if(thread_id == 0) timer_1 = SuperLU_timer_();
+                            #endif
+                            tempv = tempv1 + cum_nrow;             
 
 #ifdef OPT_SCATTER
-                            ptr_pair_t tmp_pair_ptr;
-                            tmp_pair_ptr = zscatter_l_opt_search_moveptr(
+                            // ptr_pair_t tmp_pair_ptr;
+                            // tmp_pair_ptr = zscatter_l_opt(
+                            //     ib, ljb, nsupc, iukp, xsup, klst, nbrow, lptr,
+                            //     temp_nbrow, usub, lsub, tempv,
+                            //     indirect_thread, indirect2_thread,
+                            //     Lrowind_bc_ptr, Lnzval_bc_ptr, grid,
+                            //     lptrj_now, luptrj_now
+                            // );
+                            // lptrj_now = tmp_pair_ptr.ptr;
+                            // luptrj_now = tmp_pair_ptr.uptr;
+                            lid_now = zscatter_l_table(
                                 ib, ljb, nsupc, iukp, xsup, klst, nbrow, lptr,
                                 temp_nbrow, usub, lsub, tempv,
                                 indirect_thread, indirect2_thread,
                                 Lrowind_bc_ptr, Lnzval_bc_ptr, grid,
-                                lptrj_now, luptrj_now
+                                l_gid, l_ptr, l_uptr,
+                                lid_now
                             );
-                            lptrj_now = tmp_pair_ptr.ptr;
-                            luptrj_now = tmp_pair_ptr.uptr;
 #else
 
                             zscatter_l(
@@ -611,25 +679,38 @@ if (msg0 && msg2) {  /* L(:,k) and U(k,:) are not empty. */
                                 Lrowind_bc_ptr, Lnzval_bc_ptr, grid
                             );
 #endif
+                        #ifdef TIMER_SCATTER
+                        if(thread_id == 0) Schur_scatter_timer_l += (SuperLU_timer_()-timer_1);
+                        #endif
                         } /* if ib < jb ... */
-
-                        lptr += temp_nbrow;
-                        luptr += temp_nbrow;
-                        cum_nrow += temp_nbrow;
+                        
+                        /*Guofeng: useless code?*/
+                        // lptr += temp_nbrow;
+                        // luptr += temp_nbrow;
+                        // cum_nrow += temp_nbrow;
 
                     } /* for lb ... */
-
                     luptr = luptr0;
                 } /* for j = jjj_st ... */
 
                 // TAU_STATIC_TIMER_STOP("SPECIAL_CPU_SCATTER");
             }
             else { // ncpu_blks >= omp_get_num_threads()
+            #ifdef TIMER_SCATTER
+            double timer_2 = SuperLU_timer_();
+            #endif
 #ifdef _OPENMP
 #pragma omp for schedule(SCHEDULE_STRATEGY) nowait
 #endif
                 for (j = jjj_st; j < jjj_st + ncpu_blks; ++j) {
                     /* code */
+                    #ifdef TIMER_SCATTER
+                    double timer_1 = 0.0;
+                    if(thread_id == 0){
+                        timer_1 = SuperLU_timer_();
+                    } 
+                    #endif
+
 #ifdef PI_DEBUG
                     printf("scattering block column %d\n", j);
 #endif
@@ -646,13 +727,56 @@ if (msg0 && msg2) {  /* L(:,k) and U(k,:) are not empty. */
                     lptr = lptr0;
                     luptr = luptr0;
 
+                    #ifdef OPT_SCATTER
                     int_t lptrj_now = BC_HEADER;
                     int_t luptrj_now = 0;
+                    int_t lid_now = 0;
 
+                    int_t tmp_lptr = lptr;
+                    char flag_l = 0;
+                    for (lb = 0; lb < nlb; lb++) {
+                        #ifdef TIMER_SCATTER
+                        if(thread_id == 0) timer_1 = SuperLU_timer_();
+                        #endif
+
+                        ib = lsub[tmp_lptr];       /* Row block L(i,k). */
+                        temp_nbrow = lsub[lptr + 1];  /* Number of full rows. */
+                        // assert(temp_nbrow <= nbrow);
+                        tmp_lptr += LB_DESCRIPTOR; /* Skip descriptor. */
+                        if(ib >= jb){
+                            flag_l = 1;
+                            break;
+                        }
+                        tmp_lptr += temp_nbrow;
+                    }
+                    int_t* index_tmp = Lrowind_bc_ptr[ljb];
+                    int num_lblk = index_tmp[0];
+                    int num_lrow = index_tmp[1];
+                    // Separate infos to keep locality for L
+                    int_t l_gid[num_lblk];
+                    int_t l_ptr[num_lblk];
+                    int_t l_uptr[num_lblk];
+                    for(int i = 0; i < num_lblk; i++){
+                        l_gid[i] = index_tmp[lptrj_now];
+                        l_uptr[i] = luptrj_now;
+                        l_ptr[i] = lptrj_now;
+                        luptrj_now += index_tmp[lptrj_now + 1];
+                        lptrj_now += LB_DESCRIPTOR + index_tmp[lptrj_now + 1];
+                    }
+                    // Separate infos to keep locality for U
                     int_t iuip_lib_now = BR_HEADER;
                     int_t ruip_lib_now = 0;
+                    #endif
+
+                    #ifdef TIMER_SCATTER
+                    if(thread_id == 0) Schur_scatter_timer_others += (SuperLU_timer_() - timer_1);
+                    #endif
 
                     for (lb = 0; lb < nlb; lb++) {
+                        #ifdef TIMER_SCATTER
+                        if(thread_id == 0) timer_1 = SuperLU_timer_();
+                        #endif
+
                         ib = lsub[lptr];       /* Row block L(i,k). */
                         temp_nbrow = lsub[lptr + 1];  /* Number of full rows. */
                         assert(temp_nbrow <= nbrow);
@@ -667,18 +791,36 @@ if (msg0 && msg2) {  /* L(:,k) and U(k,:) are not empty. */
                         }
                         printf("%d %d %d \n", temp_nbrow, temp_ncol, ldu);
 #endif
-
+                    #ifdef TIMER_SCATTER
+                    if(thread_id == 0) Schur_scatter_timer_others += (SuperLU_timer_() - timer_1);
+                    #endif
                         /* Now gather the result into the destination block. */
                         if (ib < jb) {  /* A(i,j) is in U. */
 #ifdef PI_DEBUG
                             printf("cpu scatter \n");
                             printf("A(%d,%d) goes to U block %d \n", ib, jb, ljb);
 #endif
-
+                            #ifdef TIMER_SCATTER
+                            if(thread_id == 0) timer_1 = SuperLU_timer_();
+                            #endif
                             tempv = tempv1 + cum_nrow;
 #ifdef OPT_SCATTER
-                            ptr_pair_t tmp_pair_ptr;
-                            tmp_pair_ptr = zscatter_u_opt_search_moveptr(
+                            // ptr_pair_t tmp_pair_ptr;
+                            // tmp_pair_ptr = zscatter_u_opt_search_moveptr(
+                            //     ib, jb,
+                            //     nsupc, iukp, xsup,
+                            //     klst, nbrow,
+                            //     lptr, temp_nbrow, lsub,
+                            //     usub, tempv,
+                            //     Ufstnz_br_ptr,
+                            //     Unzval_br_ptr,
+                            //     grid,
+                            //     iuip_lib_now,
+                            //     ruip_lib_now
+                            // );
+                            // iuip_lib_now = tmp_pair_ptr.ptr;
+                            // ruip_lib_now = tmp_pair_ptr.uptr;
+                            zscatter_u(
                                 ib, jb,
                                 nsupc, iukp, xsup,
                                 klst, nbrow,
@@ -686,12 +828,8 @@ if (msg0 && msg2) {  /* L(:,k) and U(k,:) are not empty. */
                                 usub, tempv,
                                 Ufstnz_br_ptr,
                                 Unzval_br_ptr,
-                                grid,
-                                iuip_lib_now,
-                                ruip_lib_now
+                                grid
                             );
-                            // iuip_lib_now = tmp_pair_ptr.ptr;
-                            // ruip_lib_now = tmp_pair_ptr.uptr;
 #else
 
                             zscatter_u(
@@ -705,6 +843,9 @@ if (msg0 && msg2) {  /* L(:,k) and U(k,:) are not empty. */
                                 grid
                             );
 #endif
+                            #ifdef TIMER_SCATTER
+                            if(thread_id == 0) Schur_scatter_timer_u += (SuperLU_timer_() - timer_1);
+                            #endif
                         }
                         else {    /* A(i,j) is in L. */
 #ifdef PI_DEBUG
@@ -712,18 +853,28 @@ if (msg0 && msg2) {  /* L(:,k) and U(k,:) are not empty. */
                             printf("A(%d,%d) goes to L block %d \n", ib, jb, ljb);
 #endif
                             tempv = tempv1 + cum_nrow;
-
+                            #ifdef TIMER_SCATTER
+                            if(thread_id == 0) timer_1 = SuperLU_timer_();
+                            #endif
 #ifdef OPT_SCATTER
-                            ptr_pair_t tmp_pair_ptr;
-                             tmp_pair_ptr = zscatter_l_opt_search_moveptr(
+                            // ptr_pair_t tmp_pair_ptr;
+                            //  tmp_pair_ptr = zscatter_l_opt(
+                            //     ib, ljb, nsupc, iukp, xsup, klst, nbrow, lptr,
+                            //     temp_nbrow, usub, lsub, tempv,
+                            //     indirect_thread, indirect2_thread,
+                            //     Lrowind_bc_ptr, Lnzval_bc_ptr, grid,
+                            //     lptrj_now, luptrj_now
+                            // );
+                            // lptrj_now = tmp_pair_ptr.ptr;
+                            // luptrj_now = tmp_pair_ptr.uptr;
+                            lid_now = zscatter_l_table(
                                 ib, ljb, nsupc, iukp, xsup, klst, nbrow, lptr,
                                 temp_nbrow, usub, lsub, tempv,
                                 indirect_thread, indirect2_thread,
                                 Lrowind_bc_ptr, Lnzval_bc_ptr, grid,
-                                lptrj_now, luptrj_now
+                                l_gid, l_ptr, l_uptr,
+                                lid_now
                             );
-                            lptrj_now = tmp_pair_ptr.ptr;
-                            luptrj_now = tmp_pair_ptr.uptr;
 #else
                             zscatter_l(
                                 ib, ljb, nsupc, iukp, xsup, klst, nbrow, lptr,
@@ -732,6 +883,9 @@ if (msg0 && msg2) {  /* L(:,k) and U(k,:) are not empty. */
                                 Lrowind_bc_ptr, Lnzval_bc_ptr, grid
                             );
 #endif
+                        #ifdef TIMER_SCATTER
+                        if(thread_id == 0) Schur_scatter_timer_l += (SuperLU_timer_() - timer_1);
+                        #endif
                         } /* if ib < jb ... */
 
                         lptr += temp_nbrow;
@@ -742,6 +896,9 @@ if (msg0 && msg2) {  /* L(:,k) and U(k,:) are not empty. */
 
                     luptr = luptr0;
                 } /* for j = jjj_st ... */
+                #ifdef TIMER_SCATTER
+                Schur_scatter_timer_tot += SuperLU_timer_() - timer_2;
+                #endif
             }     /* else (ncpu_blks >= omp_get_num_threads()) */
         }         /* parallel region */
 
@@ -781,7 +938,7 @@ if (msg0 && msg2) {  /* L(:,k) and U(k,:) are not empty. */
                 assert(jjj_st1 > jjj_st);
 
                 /* now scatter it */
-#pragma omp for schedule( SCHEDULE_STRATEGY ) nowait
+#pragma omp for schedule(SCHEDULE_STRATEGY) nowait
                 for (j = jjj_st1; j < jjj_end; ++j) {
                     /* code */
 #ifdef PI_DEBUG
@@ -833,8 +990,22 @@ if (msg0 && msg2) {  /* L(:,k) and U(k,:) are not empty. */
 
                             tempv = tempv1 + cum_nrow;
 #ifdef OPT_SCATTER
-                            ptr_pair_t tmp_pair_ptr;
-                            tmp_pair_ptr = zscatter_u_opt_search_moveptr(
+                            // ptr_pair_t tmp_pair_ptr;
+                            // tmp_pair_ptr = zscatter_u_opt_search_moveptr(
+                            //     ib, jb,
+                            //     nsupc, iukp, xsup,
+                            //     klst, nbrow,
+                            //     lptr, temp_nbrow, lsub,
+                            //     usub, tempv,
+                            //     Ufstnz_br_ptr,
+                            //     Unzval_br_ptr,
+                            //     grid,
+                            //     iuip_lib_now,
+                            //     ruip_lib_now
+                            // );
+                            // iuip_lib_now = tmp_pair_ptr.ptr;
+                            // ruip_lib_now = tmp_pair_ptr.uptr;
+                            zscatter_u(
                                 ib, jb,
                                 nsupc, iukp, xsup,
                                 klst, nbrow,
@@ -842,12 +1013,8 @@ if (msg0 && msg2) {  /* L(:,k) and U(k,:) are not empty. */
                                 usub, tempv,
                                 Ufstnz_br_ptr,
                                 Unzval_br_ptr,
-                                grid,
-                                iuip_lib_now,
-                                ruip_lib_now
+                                grid
                             );
-                            // iuip_lib_now = tmp_pair_ptr.ptr;
-                            // ruip_lib_now = tmp_pair_ptr.uptr;
 #else
                             zscatter_u(
                                 ib, jb,
@@ -871,7 +1038,7 @@ if (msg0 && msg2) {  /* L(:,k) and U(k,:) are not empty. */
                             tempv = tempv1 + cum_nrow;
 #ifdef OPT_SCATTER
                             ptr_pair_t tmp_pair_ptr;
-                            tmp_pair_ptr = zscatter_l_opt_search_moveptr(
+                            tmp_pair_ptr = zscatter_l_opt(
                                 ib, ljb, nsupc, iukp, xsup, klst, nbrow, lptr,
                                 temp_nbrow, usub, lsub, tempv,
                                 indirect_thread, indirect2_thread,

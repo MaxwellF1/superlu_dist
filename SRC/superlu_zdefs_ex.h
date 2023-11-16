@@ -6,6 +6,7 @@
 #include "superlu_zdefs.h"
 #include "utils.h"
 #include "cuda_runtime.h"
+#include "uthash.h"
 // colunm
 typedef struct {
     doublecomplex* val;
@@ -46,7 +47,19 @@ void upanelfact_trsm(int_t k0, int_t k, Glu_persist_t* Glu_persist, gridinfo_t* 
 typedef struct{
     int_t ptr;
     int_t uptr;
+    int_t idx;
 }ptr_pair_t;
+
+typedef struct{
+    int gid; /*key*/
+    ptr_pair_t *ptr_pair; /*value*/
+    UT_hash_handle hh; /*makes this structure hashtable*/
+}L_hash_t;
+
+void add_lblk(L_hash_t ** L_ptr, int lgid, ptr_pair_t *ptr_pair);
+L_hash_t* find_lblk(L_hash_t ** L_ptr, int lgid);
+void delete_lblk(L_hash_t ** L_ptr, L_hash_t *user);
+void delete_all(L_hash_t ** L_ptr);
 
 ptr_pair_t zscatter_l_opt(
     int ib,         /* row block number of source block L(i,k) */
@@ -121,6 +134,63 @@ ptr_pair_t zscatter_u_opt_search_moveptr(int ib,
     gridinfo_t* grid,
     int_t iuip_lib_now,
     int_t ruip_lib_now);
+
+ptr_pair_t zscatter_l_opt_search_moveptr_recidx(
+    int ib,    /* row block number of source block L(i,k) */
+    int ljb,   /* local column block number of dest. block L(i,j) */
+    int nsupc, /* number of columns in destination supernode */
+    int_t iukp, /* point to destination supernode's index[] */
+    int_t* xsup,
+    int klst,
+    int nbrow,  /* LDA of the block in tempv[] */
+    int_t lptr, /* Input, point to index[] location of block L(i,k) */
+    int temp_nbrow, /* number of rows of source block L(i,k) */
+    int_t* usub,
+    int_t* lsub,
+    doublecomplex* tempv,
+    int* indirect_thread, int* indirect2,
+    int_t** Lrowind_bc_ptr, doublecomplex** Lnzval_bc_ptr,
+    gridinfo_t* grid,
+    int_t lptrj_now,
+    int_t luptrj_now,
+    int_t local_lidx_now);
+
+ptr_pair_t zscatter_u_opt_search_moveptr_recidx(int ib,
+    int jb,
+    int nsupc,
+    int_t iukp,
+    int_t* xsup,
+    int klst,
+    int nbrow,      /* LDA of the block in tempv[] */
+    int_t lptr,     /* point to index location of block L(i,k) */
+    int temp_nbrow, /* number of rows of source block L(i,k) */
+    int_t* lsub,
+    int_t* usub,
+    doublecomplex* tempv,
+    int_t** Ufstnz_br_ptr, doublecomplex** Unzval_br_ptr,
+    gridinfo_t* grid,
+    int_t iuip_lib_now,
+    int_t ruip_lib_now);
+
+int_t
+zscatter_l_table(
+    int ib,    /* row block number of source block L(i,k) */
+    int ljb,   /* local column block number of dest. block L(i,j) */
+    int nsupc, /* number of columns in destination supernode */
+    int_t iukp, /* point to destination supernode's index[] */
+    int_t* xsup,
+    int klst,
+    int nbrow,  /* LDA of the block in tempv[] */
+    int_t lptr, /* Input, point to index[] location of block L(i,k) */
+    int temp_nbrow, /* number of rows of source block L(i,k) */
+    int_t* usub,
+    int_t* lsub,
+    doublecomplex* tempv,
+    int* indirect_thread, int* indirect2,
+    int_t** Lrowind_bc_ptr, doublecomplex** Lnzval_bc_ptr,
+    gridinfo_t* grid,
+    int_t* gid_table, int_t* lptr_table, int_t* luptr_table,
+    int_t lid_now);
 
 #ifdef GPU_ACC
 #ifdef __cplusplus

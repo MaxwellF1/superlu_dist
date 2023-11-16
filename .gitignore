@@ -21,3 +21,8 @@ Testing/
 opt-gpu-build/
 run_cmake_build-opt-all-add-cublas-ict.sh
 .vscode
+
+SRC/uthash.c
+SRC/uthash.h
+SRC/zSchCompUdt-gpu.bak
+SRC/zSchCompUdt-gpu1.bak

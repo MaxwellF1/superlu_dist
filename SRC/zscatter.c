@@ -668,6 +668,226 @@ zscatter_u_opt_search_moveptr(int ib,
 } /* zscatter_u_opt_search_moveptr */
 
 
+ptr_pair_t
+zscatter_l_opt_search_moveptr_recidx(
+    int ib,    /* row block number of source block L(i,k) */
+    int ljb,   /* local column block number of dest. block L(i,j) */
+    int nsupc, /* number of columns in destination supernode */
+    int_t iukp, /* point to destination supernode's index[] */
+    int_t* xsup,
+    int klst,
+    int nbrow,  /* LDA of the block in tempv[] */
+    int_t lptr, /* Input, point to index[] location of block L(i,k) */
+    int temp_nbrow, /* number of rows of source block L(i,k) */
+    int_t* usub,
+    int_t* lsub,
+    doublecomplex* tempv,
+    int* indirect_thread, int* indirect2,
+    int_t** Lrowind_bc_ptr, doublecomplex** Lnzval_bc_ptr,
+    gridinfo_t* grid,
+    int_t lptrj_now,
+    int_t luptrj_now,
+    int_t local_lidx_now)
+{
+    #ifdef SCATTER_TIMER
+    double tt_st = SuperLU_timer_(); 
+    #endif
+    int_t rel, i, segsize, jj;
+    doublecomplex* nzval;
+    int_t* index = Lrowind_bc_ptr[ljb];
+    int_t ldv = index[1];       /* LDA of the destination lusup. */
+    int_t lptrj = lptrj_now;
+    int_t luptrj = luptrj_now;
+    int_t ijb = index[lptrj];
+    #ifdef SCATTER_TIMER
+    Scatter_other_timer_l += SuperLU_timer_() - tt_st;
+    #endif
+
+    #ifdef SCATTER_TIMER
+    tt_st = SuperLU_timer_();
+    #endif
+    int uidx = 0;
+    while (ijb != ib)  /* Search for destination block L(i,j) */
+    {
+        luptrj += index[lptrj + 1];
+        lptrj += LB_DESCRIPTOR + index[lptrj + 1];
+        ijb = index[lptrj];
+        uidx++;
+    }
+
+    ptr_pair_t tmp_pair;
+    tmp_pair.ptr = lptrj;
+    tmp_pair.uptr = luptrj;
+    tmp_pair.idx = local_lidx_now + i;
+    #ifdef SCATTER_TIMER
+    Scatter_search_timer += SuperLU_timer_() - tt_st;
+    #endif
+    /*
+     * Build indirect table. This is needed because the indices are not sorted
+     * in the L blocks.
+     */
+    #ifdef SCATTER_TIMER
+    tt_st = SuperLU_timer_();
+    #endif
+    int_t fnz = FstBlockC(ib);
+    int_t dest_nbrow;
+    lptrj += LB_DESCRIPTOR;
+    dest_nbrow = index[lptrj - 1];
+
+#if (_OPENMP>=201307)
+#pragma omp simd
+#endif
+    for (i = 0; i < dest_nbrow; ++i) {
+        rel = index[lptrj + i] - fnz;
+        indirect_thread[rel] = i;
+
+    }
+
+#if (_OPENMP>=201307)
+#pragma omp simd
+#endif
+    /* can be precalculated? */
+    for (i = 0; i < temp_nbrow; ++i) { /* Source index is a subset of dest. */
+        rel = lsub[lptr + i] - fnz;
+        indirect2[i] = indirect_thread[rel];
+    }
+    #ifdef SCATTER_TIMER
+    Scatter_indirect_timer += SuperLU_timer_() - tt_st;
+    #endif
+
+    #ifdef SCATTER_TIMER
+    tt_st = SuperLU_timer_();
+    #endif
+
+    nzval = Lnzval_bc_ptr[ljb] + luptrj; /* Destination block L(i,j) */
+#ifdef __INTEL_COMPILER
+#pragma ivdep
+#endif
+    for (jj = 0; jj < nsupc; ++jj) {
+        segsize = klst - usub[iukp + jj];
+        if (segsize) {
+#if (_OPENMP>=201307)
+#pragma omp simd
+#endif
+            for (i = 0; i < temp_nbrow; ++i) {
+                z_sub(&nzval[indirect2[i]], &nzval[indirect2[i]], &tempv[i]);
+            }
+            tempv += nbrow;
+        }
+        nzval += ldv;
+    }
+    #ifdef SCATTER_TIMER
+    Scatter_sub_timer += SuperLU_timer_() - tt_st;
+    #endif   
+    return tmp_pair;
+} /* zscatter_l_opt_search_moveptr_recidx */
+
+int_t
+zscatter_l_table(
+    int ib,    /* row block number of source block L(i,k) */
+    int ljb,   /* local column block number of dest. block L(i,j) */
+    int nsupc, /* number of columns in destination supernode */
+    int_t iukp, /* point to destination supernode's index[] */
+    int_t* xsup,
+    int klst,
+    int nbrow,  /* LDA of the block in tempv[] */
+    int_t lptr, /* Input, point to index[] location of block L(i,k) */
+    int temp_nbrow, /* number of rows of source block L(i,k) */
+    int_t* usub,
+    int_t* lsub,
+    doublecomplex* tempv,
+    int* indirect_thread, int* indirect2,
+    int_t** Lrowind_bc_ptr, doublecomplex** Lnzval_bc_ptr,
+    gridinfo_t* grid,
+    int_t* gid_table, int_t* lptr_table, int_t* luptr_table,
+    int_t lid_now)
+{
+    #ifdef SCATTER_TIMER
+    double tt_st = SuperLU_timer_(); 
+    #endif
+    int_t rel, i, segsize, jj;
+    doublecomplex* nzval;
+    int_t* index = Lrowind_bc_ptr[ljb];
+    int_t ldv = index[1];       /* LDA of the destination lusup. */
+    int_t ijb = gid_table[lid_now];
+    #ifdef SCATTER_TIMER
+    Scatter_other_timer_l += SuperLU_timer_() - tt_st;
+    #endif
+
+    #ifdef SCATTER_TIMER
+    tt_st = SuperLU_timer_();
+    #endif
+    while (ijb != ib)  /* Search for destination block L(i,j) */
+    {
+        lid_now++;
+        ijb = gid_table[lid_now];
+    }
+    int_t lptrj = lptr_table[lid_now];
+    int_t luptrj = luptr_table[lid_now];
+
+    #ifdef SCATTER_TIMER
+    Scatter_search_timer += SuperLU_timer_() - tt_st;
+    #endif
+    /*
+     * Build indirect table. This is needed because the indices are not sorted
+     * in the L blocks.
+     */
+    #ifdef SCATTER_TIMER
+    tt_st = SuperLU_timer_();
+    #endif
+    int_t fnz = FstBlockC(ib);
+    int_t dest_nbrow;
+    lptrj += LB_DESCRIPTOR;
+    dest_nbrow = index[lptrj - 1];
+
+#if (_OPENMP>=201307)
+#pragma omp simd
+#endif
+    for (i = 0; i < dest_nbrow; ++i) {
+        rel = index[lptrj + i] - fnz;
+        indirect_thread[rel] = i;
+
+    }
+
+#if (_OPENMP>=201307)
+#pragma omp simd
+#endif
+    /* can be precalculated? */
+    for (i = 0; i < temp_nbrow; ++i) { /* Source index is a subset of dest. */
+        rel = lsub[lptr + i] - fnz;
+        indirect2[i] = indirect_thread[rel];
+    }
+    #ifdef SCATTER_TIMER
+    Scatter_indirect_timer += SuperLU_timer_() - tt_st;
+    #endif
+
+    #ifdef SCATTER_TIMER
+    tt_st = SuperLU_timer_();
+    #endif
+
+    nzval = Lnzval_bc_ptr[ljb] + luptrj; /* Destination block L(i,j) */
+#ifdef __INTEL_COMPILER
+#pragma ivdep
+#endif
+    for (jj = 0; jj < nsupc; ++jj) {
+        segsize = klst - usub[iukp + jj];
+        if (segsize) {
+#if (_OPENMP>=201307)
+#pragma omp simd
+#endif
+            for (i = 0; i < temp_nbrow; ++i) {
+                z_sub(&nzval[indirect2[i]], &nzval[indirect2[i]], &tempv[i]);
+            }
+            tempv += nbrow;
+        }
+        nzval += ldv;
+    }
+    #ifdef SCATTER_TIMER
+    Scatter_sub_timer += SuperLU_timer_() - tt_st;
+    #endif   
+    return lid_now;
+} /* zscatter_l_table */
+
 void
 zscatter_l(
     int ib,    /* row block number of source block L(i,k) */
@@ -827,6 +1047,7 @@ zscatter_u(int ib,
         iuip_lib += UB_DESCRIPTOR + SuperSize(ijb);
         ijb = index[iuip_lib];
     }
+    assert(ijb == jb);
     #ifdef SCATTER_TIMER
     Scatter_search_timer += SuperLU_timer_() - tt_st;
     #endif
